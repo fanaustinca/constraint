@@ -23,9 +23,21 @@ draw back.
 | V · recovery | 129–152 | corruption, every file mandatory, no checkpoints |
 | VI · authored | 153 | one sheet, 24 screens, every block in the library |
 
+## Layout
+
+`game.html` is the source of truth — it has no `<!doctype>` or `<head>` because the Claude
+artifact platform supplies those. `index.html` is generated from it by `tools/build.js`, which
+adds the document shell, charset and viewport meta that standalone hosting needs. **Edit
+`game.html`, never `index.html`.**
+
+```bash
+node tools/build.js     # game.html -> index.html   (run before every commit)
+node tools/extract.js   # game.html -> build/game.js (for the test harness)
+```
+
 ## Architecture
 
-Everything lives in `index.html`.
+The game itself is one file, `game.html`.
 
 - **Segments.** Levels are composed from 34 hand-authored 16×18 tile segments (`CHUNKS`).
   Each keeps its outer two columns clear with solid ground beneath, so any segment can follow
@@ -43,7 +55,7 @@ reached the player's hitbox, a gravity-flip exploit that trivialised a whole act
 gated behind a 39-second deadline that could not be met.
 
 ```bash
-node tools/extract.js       # index.html -> build/game.js
+node tools/extract.js       # game.html -> build/game.js
 cd tools
 node solvability.js         # bot-plays all 153 sheets, reports any it cannot finish
 node bounds.js              # asserts the player never leaves the sheet
