@@ -65,6 +65,18 @@ node bounds.js              # asserts the player never leaves the sheet
 paced — those still need a human. It also cannot see a hazard that fails to threaten anything,
 which is exactly how the harmless-saw bug survived for as long as it did.
 
+## Build mode
+
+Finish all 153 sheets (or enter the dev code) and a **Build** button appears on the menu.
+Paint a sheet from the full block palette, size it 32–192 columns, keep three save slots,
+and test-play it in place.
+
+**Compile** turns the sheet into a share code — `CS1.<cols>.<run-length data>`, a few dozen
+characters for a typical sheet. Hand it to someone else, they paste it into their copy and
+press **Paste code**, and they have your level. No tile character is a digit, so run lengths
+parse unambiguously; decoding validates the column count and total tile count and refuses
+anything malformed.
+
 ## Controls
 
 Arrows or WASD to move · Space/W/Up to jump (hold for height) · Shift/X to dash ·
