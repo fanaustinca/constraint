@@ -164,7 +164,12 @@ button.tiny{padding:5px 10px; font-size:10px; letter-spacing:.1em}
 .touch b.act{border-color:var(--accent); color:var(--accent)}
 .touch .l{left:3%} .touch .r{left:19%}
 .touch .a{right:3%} .touch .bb{right:19%} .touch .cc{right:35%}
-.buildui{display:flex; flex-direction:column; gap:8px; width:min(700px,100%)}
+.buildpanel{
+  display:none; flex-direction:column; gap:8px;
+  background:var(--panel); border:1px solid var(--gridmaj); padding:10px;
+}
+.buildpanel.on{display:flex}
+.buildui{display:flex; flex-direction:column; gap:8px; width:100%}
 .brow{display:flex; align-items:center; gap:5px; flex-wrap:wrap}
 .blabel{font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--text-faint); margin-right:2px}
 .bval{font-size:11px; color:var(--text); font-variant-numeric:tabular-nums; min-width:30px; text-align:center}
@@ -250,36 +255,6 @@ button.tiny{padding:5px 10px; font-size:10px; letter-spacing:.1em}
         <div class="codemsg" id="codeMsg"></div>
       </div>
 
-      <div class="ov" id="ovBuild">
-        <div class="buildui">
-          <div class="brow">
-            <span class="blabel">Block</span>
-            <span class="palette" id="palette"></span>
-          </div>
-          <div class="brow">
-            <span class="blabel">Width</span>
-            <button class="tiny" id="bWide-">–</button>
-            <span class="bval" id="bCols">64</span>
-            <button class="tiny" id="bWide+">+</button>
-            <span class="blabel">Slot</span>
-            <button class="tiny" id="bSlot1">1</button>
-            <button class="tiny" id="bSlot2">2</button>
-            <button class="tiny" id="bSlot3">3</button>
-            <button class="tiny" id="bSave">Save</button>
-            <button class="tiny" id="bLoad">Load</button>
-            <button class="tiny" id="bClear">Clear</button>
-          </div>
-          <div class="brow">
-            <button class="primary" id="bTest">Test sheet</button>
-            <button id="bCompile">Compile</button>
-            <button id="bPaste">Paste code</button>
-            <button id="bExit">Done</button>
-          </div>
-          <textarea id="bCode" spellcheck="false" placeholder="Compile puts a share code here. Paste a friend's code in and press Paste code."></textarea>
-          <div class="codemsg" id="bMsg"></div>
-        </div>
-      </div>
-
       <div class="ov" id="ovHow">
         <div class="howto">
           <div class="h">Input</div>
@@ -342,6 +317,35 @@ button.tiny{padding:5px 10px; font-size:10px; letter-spacing:.1em}
     </div>
   </div>
 
+  <div class="buildpanel" id="buildPanel">
+    <div class="buildui">
+      <div class="brow">
+        <span class="blabel">Block</span>
+        <span class="palette" id="palette"></span>
+      </div>
+      <div class="brow">
+        <span class="blabel">Width</span>
+        <button class="tiny" id="bWide-">–</button>
+        <span class="bval" id="bCols">64</span>
+        <button class="tiny" id="bWide+">+</button>
+        <span class="blabel">Slot</span>
+        <button class="tiny" id="bSlot1">1</button>
+        <button class="tiny" id="bSlot2">2</button>
+        <button class="tiny" id="bSlot3">3</button>
+        <button class="tiny" id="bSave">Save</button>
+        <button class="tiny" id="bLoad">Load</button>
+        <button class="tiny" id="bClear">Clear</button>
+      </div>
+      <div class="brow">
+        <button class="primary" id="bTest">Test sheet</button>
+        <button id="bCompile">Generate code</button>
+        <button id="bPaste">Load code</button>
+        <button id="bExit">Done</button>
+      </div>
+      <textarea id="bCode" spellcheck="false" placeholder="Generate code puts your share code here. Paste a friend's code in and press Load code."></textarea>
+      <div class="codemsg" id="bMsg"></div>
+    </div>
+  </div>
   <div class="cmd">
     <span class="grp"><kbd>&larr;&rarr;</kbd> move</span>
     <span class="grp"><kbd>SPACE</kbd> jump</span>
@@ -2834,7 +2838,7 @@ function buildPicker(){
 function buildUnlocked(){ return SAVE.dev || SAVE.unlocked>=LEVELS.length; }
 function openBuild(){
   if(!ED.grid) ED.grid=blankGrid(ED.cols);
-  G.state='edit'; G.cam=0; showOv('ovBuild'); paintPalette();
+  G.state='edit'; G.cam=0; showOv(null); $('buildPanel').classList.add('on'); paintPalette();
 }
 function paintPalette(){
   const p=$('palette'); p.innerHTML='';
@@ -2851,11 +2855,19 @@ function bMsg(t,bad){ const e=$('bMsg'); e.textContent=t; e.classList.toggle('ba
   clearTimeout(bMsg._t); bMsg._t=setTimeout(()=>{e.textContent='';},3000); }
 function resizeGrid(nc){
   const g=blankGrid(nc);
+  for(let y=0;y<ROWS;y++) for(let x=0;x<nc;x++) if(g[y][x]==="P"||g[y][x]==="X") g[y][x]=".";
   for(let y=0;y<ROWS;y++) for(let x=0;x<Math.min(nc,ED.cols);x++) g[y][x]=ED.grid[y][x];
+  let hasP=false, hasX=false;                 /* exactly one spawn and one exit */
+  for(let y=0;y<ROWS;y++) for(let x=0;x<nc;x++){
+    if(g[y][x]==="P"){ if(hasP) g[y][x]="."; hasP=true; }
+    else if(g[y][x]==="X"){ if(hasX) g[y][x]="."; hasX=true; }
+  }
+  if(!hasP) g[ROWS-4][1]="P";
+  if(!hasX) g[ROWS-4][nc-3]="X";
   ED.grid=g; ED.cols=nc; paintPalette();
 }
 $('btnBuild').onclick=openBuild;
-$('bExit').onclick=()=>{ G.state='menu'; showOv('ovMenu'); };
+$('bExit').onclick=()=>{ $('buildPanel').classList.remove('on'); G.state='menu'; showOv('ovMenu'); };
 $('bWide-').onclick=()=>{ if(ED.cols>32) resizeGrid(ED.cols-16); };
 $('bWide+').onclick=()=>{ if(ED.cols<192) resizeGrid(ED.cols+16); };
 [1,2,3].forEach(i=>$('bSlot'+i).onclick=()=>{ ED.slot=i; paintPalette(); });
@@ -2867,11 +2879,11 @@ $('bLoad').onclick=()=>{ const c=(SAVE.builds||{})[ED.slot];
   ED.grid=d.g; ED.cols=d.cols; paintPalette(); bMsg('loaded slot '+ED.slot); };
 $('bClear').onclick=()=>{ ED.grid=blankGrid(ED.cols); bMsg('cleared'); };
 $('bCompile').onclick=()=>{ const c=encodeGrid(ED.grid,ED.cols);
-  $('bCode').value=c; $('bCode').select(); bMsg('compiled — '+c.length+' characters, copy it'); };
+  $('bCode').value=c; $('bCode').select(); bMsg('code ready — '+c.length+' characters, copy it'); };
 $('bPaste').onclick=()=>{ const d=decodeGrid($('bCode').value);
   if(!d) return bMsg('that code is not valid', true);
   ED.grid=d.g; ED.cols=d.cols; paintPalette(); bMsg('loaded a sheet of '+d.cols+' columns'); };
-$('bTest').onclick=()=>{ G.state='play'; showOv(null); loadCustom(ED.grid,ED.cols); ac(); };
+$('bTest').onclick=()=>{ $('buildPanel').classList.remove('on'); G.state='play'; showOv(null); loadCustom(ED.grid,ED.cols); ac(); };
 cv.addEventListener('pointerdown',e=>{ if(G.state!=='edit') return; ED.painting=true; edPaint(e); });
 cv.addEventListener('pointermove',e=>{ if(G.state==='edit'&&ED.painting) edPaint(e); });
 addEventListener('pointerup',()=>{ ED.painting=false; });
