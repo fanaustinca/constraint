@@ -16,11 +16,11 @@ function botTest(lvl, attempts, frames){
           if(d<bd){ bd=d; tx=g.x; } }
       }
       const towards=Math.sign(tx-(P.x+7))||1;
-      if(--holdT<=0){ holdT=8+Math.floor(Math.random()*22); dir=Math.random()<0.9?towards:-towards; }
+      if(--holdT<=0){ holdT=8+Math.floor(Math.random()*22); dir=Math.random()<0.92?towards:-towards; }
       IN.l=dir<0?1:0; IN.r=dir>0?1:0; IN.u=0; IN.d=Math.random()<0.02?1:0;
       if(jt>0){ jt--; IN.jumpHeld=1; } else IN.jumpHeld=0;
-      if(Math.random()<0.10){ press('jump'); jt=4+Math.floor(Math.random()*16); }
-      if(G.ab.dash && Math.random()<0.03) IN.dashP=1;
+      if(Math.random()<0.11){ press("jump"); jt=4+Math.floor(Math.random()*16); }
+      if(G.ab.dash && Math.random()<0.04) IN.dashP=1;
       try{ step(); }catch(e){ return {crash:e.message+' @f'+f}; }
       const d=Math.abs(G.exit.x-(P.x+7)); if(d<best) best=d;
       if(G.state==='done') return {solved:true, tries:a+1, parts:G.parts+'/'+G.partsTotal};

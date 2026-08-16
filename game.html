@@ -364,9 +364,9 @@ const WORLDS = [
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'glitch', allparts:true, nodatum:true, drift:1.5, phase:110, chaos:0.85} },
   { act:5, code:"RECOVERY",    name:"Recovery",    hint:"Last pass. Every file, no datums, and it is still deleting.",
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'glitch', allparts:true, nodatum:true, eat:0.7, chaos:0.62} },
-  { act:6, code:"AUTHORED",   name:"Authored",   hint:"You drew this one. Every block in the library, and no way around any of it.",
+  { act:6, code:"AUTHORED",   name:"Authored",   hint:"You drew this one. No cursor, no corruption — just the hardest sheet in the drawing.",
     ab:{dj:true, wall:true, inv:true, dash:true},
-    mod:{render:'drawn', allparts:true, eat:0.9, drift:1.2, phase:110, chaos:0.7} }
+    mod:{render:'drawn', livedraw:true} }
 ];
 
 /* ---------------------------------------------------------------------
@@ -376,6 +376,45 @@ const WORLDS = [
    --------------------------------------------------------------------- */
 const CW = 16;
 const CHUNKS = {
+
+/* --- ground is death: cross these on platforms only ------------------ */
+span:{t:["################","................","................","................",
+         "................","................","................","................",
+         "................","........o.......","................","..#####..#####..",
+         "................","................","..^^^^^^^^^^^^..","################",
+         "################","################"]},
+
+leap:{t:["################","................","................","................",
+         "................","................","................","................",
+         ".........o......","................","...##....##.....","................",
+         "................","......##........","..^^^^^^^^^^^^..","################",
+         "################","################"]},
+
+teeth:{t:["################","................","................","................",
+          "................","................","................","................",
+          "................","......o.........","................","..====..====....",
+          "................","................","..^^^^^^^^^^^^..","################",
+          "################","################"]},
+
+ladder:{t:["################","................","................","................",
+           "................","................","...o............","................",
+           "..####..........","................",".......#####....","................",
+           "..####..........","................","..^^^^^^^^^^^^..","################",
+           "################","################"]},
+
+sawspan:{t:["################","................","................","................",
+            "................","................","................","........o.......",
+            "................","................","................","..#####..#####..",
+            "................","................","..^^^^^^^^^^^^..","################",
+            "################","################"],
+         s:[{cx:7,cy:9,rad:2.2,spd:2,n:2}]},
+
+crossing:{t:["################","................","................","................",
+             "................","................","................","................",
+             "................",".......o........","................","................",
+             "................","................","..^^^^^^^^^^^^..","################",
+             "################","################"],
+          m:[{ax:2,ay:11,bx:12,by:11,w:3,h:1,spd:2.6}]},
 
 /* --- entry / exit ------------------------------------------------- */
 st:{t:["################","................","................","................",
@@ -765,17 +804,30 @@ const LEVELS = [
 {w:18,name:"Zero Fill",    chunks:["st","lock","phase","chimney","dgap","climb","float","ex"]},
 {w:18,name:"constraint.exe",chunks:["st","dgap","ceil","blade","updraft","chimney","phase","ex2"]},
 /* --- 20 · AUTHORED --- the sheet the cursor draws for you --- */
-{w:19,name:"The Last Sketch", chunks:[
+{w:19,name:"The Last Sketch",
+  /* the last five datums are the five acts, handed back to you in order */
+  zones:[
+    {at:0,  render:'drawn'},
+    {at:50, render:'normal',  label:'ACT I · FIXED'},
+    {at:53, render:'normal',  eat:1.1, label:'ACT II · REBUILD'},
+    {at:56, render:'flat',    label:'ACT III · FLATTENED'},
+    {at:59, render:'extrude', label:'ACT IV · EXTRUDED'},
+    {at:62, render:'glitch',  chaos:0.9, label:'ACT V · SYSTEM32'}],
+  chunks:[
   "st",
-  "gap","stair","spike","float","mesa","dip",
-  "crumb","thin","pit","climb","chamf","pillar","roof",
-  "wide","twin","crumbup","ferry","lift",
-  "shaft","chimney","spring","ice","orbit",
-  "ceil","mirror","flipwall","phase",
-  "dgap","blade","lock","updraft",
-  "orbit","dgap","blade","twin","ceil",
-  "chimney","mirror","phase","spring","crumb",
-  "flipwall","shaft","updraft","dgap","blade",
+  "gap","stair","spike","float","mesa","climb","dip",
+  "span","leap","teeth","span","ladder",
+  "crumb","thin","pit","chamf","roof","pillar","ice","crumbup",
+  "sawspan","leap","span","teeth","crossing",
+  "wide","twin","ferry","lift","shaft","chimney","spring","updraft",
+  "ladder","sawspan","leap","span","crossing",
+  "ceil","mirror","flipwall","phase","dgap","blade","orbit","lock",
+  "teeth","leap","span",
+  "gap","float","mesa",
+  "climb","crumb","twin",
+  "span","leap","ladder",
+  "dgap","blade","chimney",
+  "sawspan","crossing","teeth",
   "ex2"]}
 ];
 
@@ -1033,7 +1085,7 @@ function applyDrift(k){
 function loadLevel(i){
   const L=LEVELS[i]; G.lvl=i;
   const WD=WORLDS[L.w], MOD=WD.mod||{};
-  G.mod=MOD;
+  G.mod=MOD; G.zones=null;
   G.ab=Object.assign({}, WD.ab);
   (L.sup||[]).forEach(k=>G.ab[k]=false);
   const seg=L.chunks.map(id=>CHUNKS[id]);
@@ -1057,6 +1109,10 @@ function loadLevel(i){
     // a datum every other segment, never in the first or last
     if(!MOD.nodatum && k>=2 && k%2===0 && k<seg.length-1) G.grid[14][ox+1]='C';
   });
+  if(L.zones){                       /* one datum per act, exactly on the boundary */
+    G.zones=L.zones.map(z=>Object.assign({},z,{x0:z.at*CW*TS}));
+    for(const z of L.zones) if(z.at>0) G.grid[14][z.at*CW+1]='C';
+  }
   for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
     const ch=G.grid[y][x];
     if(ch==='P'){ G.spawn={x:x*TS+(TS-PW)/2, y:y*TS+(TS-PH)}; G.grid[y][x]='.'; }
@@ -1070,7 +1126,8 @@ function loadLevel(i){
   G.parts=0; G.deaths=0; G.time=0; G.won=0; G.banner=110;
   G.broken.clear(); G.crumbs.clear(); G.doorOpen=false; G.phase=0; G.phaseT=0;
   G.fx.length=0; G.trail.length=0;
-  G.cutDeleted=false; G.cutGone=false; G.revealCols=undefined;
+  G.cutDeleted=false; G.cutGone=false;
+  G.revealCols=(MOD.livedraw? VCOLS+1 : undefined);
   G.phasePeriod=MOD.phase||180;
   if(MOD.drift) applyDrift(MOD.drift);
   else if(MOD.chaos) applyDrift(0.9);
@@ -1078,11 +1135,13 @@ function loadLevel(i){
   if(MOD.chaos) for(const m of G.movers) if(m.loose) m.faller=1;
   G.rmode=MOD.render||'normal'; G.allParts=!!MOD.allparts;
   G.chaos=MOD.chaos||0; G.chaosT=200;
+  G.liveDraw=!!MOD.livedraw; G.zoneI=-1;
   G.split=0; G.splitAmt=0; G.floorWarn=0; G.floorGone=0; G.invT=0;
   G.eatOn=!!MOD.eat; G.eatSpd=MOD.eat||0;
+  if(L.zones && L.zones.some(z=>z.eat)) G.eatOn=G.eatOn||false;
   G.eater={front:-120, st:'idle', t:0, tgt:null, i:0, cx:-60, cy:VH*0.4, sx:0, sy:0};
   G.grid0=G.grid.map(r=>r.slice());
-  if(G.eatOn) buildPieces();
+  if(G.eatOn || (L.zones && L.zones.some(z=>z.eat))) buildPieces();
   respawn(true);
   document.getElementById('hint').textContent=WORLDS[L.w].hint;
   syncHud();
@@ -1443,6 +1502,28 @@ function step(){
 
   G.cam += (camTarget()-G.cam)*0.11;
 
+  if(G.liveDraw){
+    const want=Math.floor((P.x+PW)/TS)+18;
+    if(want>G.revealCols) G.revealCols=want;
+  }
+  if(G.zones){
+    let zi=0;
+    for(let i=0;i<G.zones.length;i++) if(P.x>=G.zones[i].x0) zi=i;
+    if(zi!==G.zoneI){
+      const prev=G.zoneI; G.zoneI=zi;
+      const z=G.zones[zi];
+      G.rmode=z.render||'normal';
+      const hadEater=G.eatOn;
+      G.eatOn=!!z.eat; G.eatSpd=z.eat||0;
+      if(G.eatOn && !hadEater) eaterReset();
+      G.chaos=z.chaos||0;
+      if(z.label && zi>prev){
+        flash(z.label); G.shake=5; snd(300,700,0.16,0.08,'triangle');
+        if(hadEater && !G.eatOn) setTimeout(()=>flash('CURSOR LOST'),700);
+      }
+    }
+  }
+
   /* the machine coming apart: it eases off as the files come back */
   if(G.chaos>0){
     const c=G.chaos*(G.partsTotal? 1-0.38*(G.parts/G.partsTotal) : 1);
@@ -1515,7 +1596,7 @@ const SC={
  4:{ open:60, scan:150, sel:230, rc1:280, hot1:312, click1:336, wipe:350, wipeEnd:470,
      lone:500, rc2:545, hot2:572, click2:594, dlg1:600, ok1:720, crash:760,
      text:820, end:1080 },
- 5:{ alone:70, appear:120, sweep:170, sweepEnd:470, land:300, done:520, text:560, end:900 },
+ 5:{ alone:70, appear:130, sweep:170, sweepEnd:430, land:440, done:470, text:510, end:880 },
  6:{ appear:60, stamp:150, text:220, end:560 }
 };
 function startCut(nsc){
@@ -1654,10 +1735,11 @@ function stepCut(){
     if(t===S.click2) zap();
   }
   if(sc===5){
+    G.cam=0;
     if(t>=S.sweep && t<=S.sweepEnd){
       const u=(t-S.sweep)/(S.sweepEnd-S.sweep);
-      const nc=Math.floor(-1+u*(VCOLS+2));
-      if(nc>G.revealCols){ G.revealCols=nc; if(nc%3===0) snd(760+nc*8,520,0.03,0.035,'square'); }
+      const nc=Math.floor(-1+u*(VCOLS+2));              /* just the screen you start on */
+      if(nc>G.revealCols){ G.revealCols=nc; if(nc%3===0) snd(700+nc*10,500,0.03,0.035,'square'); }
     }
     if(t>S.land && P.dead===0){
       P.vy=Math.min(MAXFALL,P.vy+GRAV);
@@ -1783,17 +1865,20 @@ function drawCut(){
 
   else if(sc===5){
     const sweeping=(t>=S.sweep&&t<=S.sweepEnd);
-    const cx5=sweeping? ease(-20,VW+20,(t-S.sweep)/(S.sweepEnd-S.sweep))
-            : (t<S.sweep? ease(-60,-20,fade((t-S.appear)/(S.sweep-S.appear))) : VW+20);
+    const nib=sweeping? (G.revealCols+1)*TS : -60;
+    const cx5=sweeping? nib : (t<S.sweep? ease(-60,0,fade((t-S.appear)/(S.sweep-S.appear))) : nib);
     if(sweeping){
-      ctx.strokeStyle='rgba(255,122,47,.55)'; ctx.lineWidth=1;
-      ctx.beginPath(); ctx.moveTo(cx5,0); ctx.lineTo(cx5,VH); ctx.stroke();
-      for(let i=0;i<3;i++) G.fx.push({x:cx5,y:Math.random()*VH,vx:-0.6,vy:(Math.random()-.5)*1.2,
-        life:16+Math.random()*12,sz:1.3,c:'#FF7A2F'});
+      ctx.strokeStyle='rgba(255,122,47,.6)'; ctx.lineWidth=1.4;
+      ctx.beginPath(); ctx.moveTo(nib,0); ctx.lineTo(nib,VH); ctx.stroke();
+      ctx.strokeStyle='rgba(255,122,47,.12)'; ctx.lineWidth=9;
+      ctx.beginPath(); ctx.moveTo(nib,0); ctx.lineTo(nib,VH); ctx.stroke();
+      for(let i=0;i<5;i++) G.fx.push({x:nib,y:Math.random()*VH,vx:-2.2-Math.random()*2,
+        vy:(Math.random()-.5)*1.6,life:14+Math.random()*14,sz:1.3,c:'#FF7A2F'});
+
     }
     if(t>S.appear && t<S.done+30){ ctx.globalAlpha=fade((t-S.appear)/20); drawCursor(cx5,VH*0.34,sweeping); ctx.globalAlpha=1; }
     if(t>S.alone && t<S.sweep) cutLine('NO GEOMETRY IN SKETCH', C.faint, fade((t-S.alone)/26));
-    if(t>=S.done && t<S.text) cutLine('SHEET '+LEVELS.length+' · '+(COLS)+' COLUMNS · EVERY BLOCK', C.accent, 1);
+    if(t>=S.done && t<S.text) cutLine('SHEET '+LEVELS.length+' · '+COLS+' COLUMNS · IT DRAWS AS YOU GO', C.accent, 1);
     if(t>S.text) endCard(S.text,'NOTHING WAS LEFT TO DELETE.','SO YOU DREW IT BACK — ALL OF IT.','T H E   L A S T   S K E T C H');
   }
   else if(sc===6){
@@ -2333,6 +2418,15 @@ function drawSheet(cam){
     if(G.rmode==='extrude'||G.cutEx) drawExtrude(cam, G.cutEx||undefined);
     drawTiles(cam); drawMovers(); drawChecks(); drawPickups(); drawSaws();
     if(G.rmode==='glitch') drawGlitch(cam);
+  }
+  if(G.liveDraw && G.revealCols!==undefined && G.revealCols<COLS){
+    const nx=(G.revealCols+1)*TS;
+    ctx.strokeStyle='rgba(255,122,47,.55)'; ctx.lineWidth=1.4;
+    ctx.beginPath(); ctx.moveTo(nx,0); ctx.lineTo(nx,VH); ctx.stroke();
+    ctx.strokeStyle='rgba(255,122,47,.10)'; ctx.lineWidth=8;
+    ctx.beginPath(); ctx.moveTo(nx,0); ctx.lineTo(nx,VH); ctx.stroke();
+    if(G.tick%2===0) G.fx.push({x:nx,y:Math.random()*VH,vx:-1.4,vy:(Math.random()-.5)*1.2,
+      life:14+Math.random()*10,sz:1.2,c:'#FF7A2F'});
   }
   if(G.floorWarn>0){
     const a=0.10+0.18*Math.abs(Math.sin(G.tick/5));
