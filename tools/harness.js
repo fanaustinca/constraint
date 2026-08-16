@@ -1,5 +1,6 @@
 const fs=require('fs'), vm=require('vm');
-const src=fs.readFileSync('../build/game.js','utf8');
+const path=require('path');
+const src=fs.readFileSync(path.join(__dirname,'..','build','game.js'),'utf8');
 
 const noop=()=>{};
 const ctxProxy=new Proxy({},{get:(t,k)=>{
