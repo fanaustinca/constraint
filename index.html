@@ -424,7 +424,39 @@ const WORLDS = [
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'glitch', allparts:true, nodatum:true, eat:0.7, chaos:0.62} },
   { act:6, code:"AUTHORED",   name:"Authored",   hint:"You drew this one. No cursor, no corruption — just the hardest sheet in the drawing.",
     ab:{dj:true, wall:true, inv:true, dash:true},
-    mod:{render:'drawn', livedraw:true} }
+    mod:{render:'drawn', livedraw:true} },
+  { act:7, code:"ORBIT", name:"Orbit", hint:"Gravity is a suggestion out here.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.55} },
+  { act:7, code:"VACUUM", name:"Vacuum", hint:"Gravity is a suggestion out here.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.5, sparse:true} },
+  { act:7, code:"TIDE", name:"Tide", hint:"Gravity is a suggestion out here.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.6, drift:1.3} },
+  { act:7, code:"APOGEE", name:"Apogee", hint:"Gravity is a suggestion out here.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.45, eat:1.0} },
+  { act:8, code:"THRESHOLD", name:"Threshold", hint:"Two doors, one sheet.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{} },
+  { act:8, code:"PAIRED", name:"Paired", hint:"Two doors, one sheet.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{phase:120} },
+  { act:8, code:"RECURSION", name:"Recursion", hint:"Two doors, one sheet.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{drift:1.3} },
+  { act:8, code:"EXIT", name:"Exit", hint:"Two doors, one sheet.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{sparse:true} },
+  { act:9, code:"SYNTAX", name:"Syntax", hint:"The sheet is its own source.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'code'} },
+  { act:9, code:"COMPILE", name:"Compile", hint:"The sheet is its own source.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'code', phase:96} },
+  { act:9, code:"RUNTIME", name:"Runtime", hint:"The sheet is its own source.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'code', eat:1.1} },
+  { act:9, code:"DEPLOY", name:"Deploy", hint:"The sheet is its own source.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'code', sparse:true} },
+  { act:10, code:"DAWN", name:"Dawn", hint:"A white sheet. Everything reads inverted.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'light'} },
+  { act:10, code:"GLARE", name:"Glare", hint:"A white sheet. Everything reads inverted.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'light', drift:1.4} },
+  { act:10, code:"NOON", name:"Noon", hint:"A white sheet. Everything reads inverted.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'light', phase:110} },
+  { act:10, code:"WHITEOUT", name:"Whiteout", hint:"A white sheet. Everything reads inverted.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'light', sparse:true} }
 ];
 
 /* ---------------------------------------------------------------------
@@ -434,6 +466,124 @@ const WORLDS = [
    --------------------------------------------------------------------- */
 const CW = 16;
 const CHUNKS = {
+
+/* --- set pieces -------------------------------------------------- */
+springpit:{t:["################","................","................","................",
+              ".......o........",".....######.....","................","................",
+              "................","................","................","................",
+              "................","................","..^^^^^B^^^^^^..","################",
+              "################","################"]},
+
+needle:{t:["################","................","................","................",
+           "................","................","................","................",
+           "................","................",".......o........","................",
+           "................","................","..^^^..^^^..^^..","################",
+           "################","################"]},
+
+hover:{t:["################","................","................","................",
+          "................","................","................","................",
+          "................","................",".......o........","..##..##..##....",
+          "................","................","..^^^^^^^^^^^^..","################",
+          "################","################"]},
+
+zigrise:{t:["################","................","................","................",
+            "................","................","...........###..","................",
+            "........###.....","................",".....###........","................",
+            "..###...........","................","..^^^^^^^^^^^^..","################",
+            "################","################"]},
+
+bridge:{t:["################","................","................","................",
+           "................","................","................","................",
+           "................","................",".......o........","................",
+           "..=====..=====..","................","................","##............##",
+           "##............##","##............##"]},
+
+pinch:{t:["################","................","................","................",
+          "................","................","................","................",
+          "................","................",".......vv.......","................",
+          "................","......====......","......^^^^......","################",
+          "################","################"]},
+
+hopline:{t:["################","................","................","................",
+            "................","................","................","................",
+            "................","................","................","................",
+            "................",".......o........","..B^^^^^^B^^^^..","################",
+            "################","################"]},
+
+crumbrun:{t:["################","................","................","................",
+             "................","................","................","................",
+             "................","................","................",".......o........",
+             "................","..~~~~~~~~~~~~..","..^^^^^^^^^^^^..","################",
+             "################","################"]},
+
+slide:{t:["################","................","................","................",
+          "................","................","................","................",
+          "................","................",".......o........","................",
+          "................","................","...........^^...","IIIIIIIIIIIIII##",
+          "################","################"]},
+
+towerup:{t:["################","................","................","................",
+            "................","................",".......####.....","................",
+            "..####..........","................",".......####.....","................",
+            "..####..........",".......o........","..^^^^^^^^^^^^..","################",
+            "################","################"]},
+
+sawgap:{t:["################","................","................","................",
+           "................","................","................","................",
+           "................","................","................",".....####.......",
+           "................",".......o........","................","####......######",
+           "####......######","####......######"],
+        s:[{cx:7,cy:13,rad:1.8,spd:2.4,n:2}]},
+
+lift2:{t:["################","................","................","................",
+          "................","................","................","................",
+          "................","................",".......o........","................",
+          "................","................","................","###..........###",
+          "###..........###","###..........###"],
+       m:[{ax:3,ay:12,bx:3,by:6,w:2,h:1,spd:2.1},{ax:11,ay:6,bx:11,by:12,w:2,h:1,spd:2.1}]},
+
+nook:{t:["################","................","................","................",
+         "................","......o.........","................","....######......",
+         "................","................","................","................",
+         "..##........##..","..##........##..","..^^........^^..","################",
+         "################","################"]},
+
+vault:{t:["################","................","................","................",
+          "................","................","........o.......","................",
+          "......SSSS......","......SSSS......","......SSSS......","......SSSS......",
+          "......SSSS......","......SSSS......","..BB..SSSS......","################",
+          "################","################"]},
+
+teethrun:{t:["################","................","................","................",
+             "................","................","................","................",
+             "................",".......o........","................","...vv....vv.....",
+             "................","................","..^^..^^^..^^...","################",
+             "################","################"]},
+
+ministep:{t:["################","................","................","................",
+             "................","................","................","................",
+             "................","......o.........","....##..........","................",
+             "........##......","............##..","..^^^^^^^^^^^^..","################",
+             "################","################"]},
+
+/* --- portals: two doors, one sheet ------------------------------- */
+pgate:{t:["################","................","................","................",
+          "................","................","................","................",
+          ".......##.......",".......##.......",".......##.......",".......##.......",
+          ".......##.......",".......##.......","....p..##..q....","################",
+          "################","################"]},
+
+pdrop:{t:["################","................","................","................",
+          "................","........o.......","...........q....","........#.......",
+          "........#.......","........#.......","........#.......","........#.......",
+          "........#.......","........#.......","....p...#.......","################",
+          "################","################"]},
+
+ploop:{t:["################","................","................","................",
+          "................","................","................","................",
+          "................",".......o........","................","...p.......q....",
+          "..........####..","................","..^^^^^^^^^^^^..","################",
+          "################","################"]},
 
 /* --- ground is death: cross these on platforms only ------------------ */
 span:{t:["################","................","................","................",
@@ -886,7 +1036,327 @@ const LEVELS = [
   "span","leap","ladder",
   "dgap","blade","chimney",
   "sawspan","crossing","teeth",
-  "ex2"]}
+  "ex2"]},
+{w:20,name:"Apoapsis",chunks:["st","stair","pillar","roof","thin","float","ex"]},
+{w:20,name:"Freefall",chunks:["st","spike","gap","climb","dip","ministep","ex"]},
+{w:20,name:"Slingshot",chunks:["st","mesa","pit","nook","roof","float","ex"]},
+{w:20,name:"Escape",chunks:["st","climb","pit","pillar","spike","thin","nook","ex"]},
+{w:20,name:"Drift",chunks:["st","twin","chamf","needle","zigrise","pinch","ex"]},
+{w:20,name:"Perigee",chunks:["st","crumbup","towerup","ferry","slide","wide","ice","ex"]},
+{w:20,name:"Coast",chunks:["st","lift","bridge","hover","lift2","teethrun","crumb","ex"]},
+{w:20,name:"Burn",chunks:["st","orbit","lift2","slide","chamf","teethrun","ex"]},
+{w:20,name:"Tumble",chunks:["st","needle","wide","crumbup","ministep","mesa","ex2"]},
+{w:20,name:"Weightless",chunks:["st","crumbrun","updraft","vault","blade","chimney","ex"]},
+{w:20,name:"Rendezvous",chunks:["st","sawspan","dgap","spring","span","mirror","flipwall","ex2"]},
+{w:20,name:"Docking",chunks:["st","crossing","phase","ceil","sawgap","teeth","hopline","ex"]},
+{w:20,name:"Delta-V",chunks:["st","shaft","leap","springpit","ladder","lock","blade","crumbrun","ex"]},
+{w:20,name:"Yaw",chunks:["st","updraft","span","sawspan","gap","vault","leap","mirror","ex"]},
+{w:20,name:"Pitch",chunks:["st","chimney","towerup","sawgap","bridge","flipwall","lift","ex"]},
+{w:20,name:"Roll",chunks:["st","dip","crumb","teeth","spring","crossing","zigrise","ex"]},
+{w:20,name:"Thrust",chunks:["st","ceil","pinch","twin","hover","orbit","shaft","dgap","ex"]},
+{w:20,name:"Attitude",chunks:["st","ladder","stair","springpit","ferry","phase","hopline","ex"]},
+{w:20,name:"Aphelion",chunks:["st","ice","lock","ladder","crumbrun","mirror","chimney","crumbup","ex2"]},
+{w:20,name:"Payload",chunks:["st","ministep","gap","lift2","shaft","vault","phase","ex"]},
+{w:21,name:"No Air",chunks:["st","float","climb","thin","spike","roof","ex2"]},
+{w:21,name:"Silence",chunks:["st","nook","mesa","stair","pit","dip","ex"]},
+{w:21,name:"Hard Vacuum",chunks:["st","pillar","nook","pit","stair","thin","ex"]},
+{w:21,name:"Outgas",chunks:["st","gap","roof","pillar","float","dip","ex"]},
+{w:21,name:"Pressure",chunks:["st","ferry","twin","crumb","slide","hover","ex"]},
+{w:21,name:"Seal",chunks:["st","wide","bridge","orbit","chamf","towerup","pinch","ex"]},
+{w:21,name:"Airlock",chunks:["st","teethrun","needle","lift","zigrise","ice","ex"]},
+{w:21,name:"Breach",chunks:["st","slide","teethrun","climb","ice","needle","mesa","ex2"]},
+{w:21,name:"Void",chunks:["st","crumb","wide","orbit","crumbup","pinch","bridge","ex2"]},
+{w:21,name:"Decompress",chunks:["st","sawgap","ceil","blade","hopline","springpit","ex"]},
+{w:21,name:"Hull",chunks:["st","teeth","leap","crossing","span","dgap","flipwall","ex"]},
+{w:21,name:"Rivet",chunks:["st","lock","updraft","spring","sawspan","flipwall","vault","ex"]},
+{w:21,name:"Bulkhead",chunks:["st","phase","zigrise","shaft","updraft","blade","spring","spike","ex2"]},
+{w:21,name:"Hatch",chunks:["st","springpit","ceil","sawspan","crumbrun","teeth","sawgap","ex"]},
+{w:21,name:"Port",chunks:["st","lift2","leap","chamf","ferry","dgap","mirror","ex2"]},
+{w:21,name:"Strut",chunks:["st","hopline","span","crossing","lock","chimney","ladder","ministep","ex2"]},
+{w:21,name:"Truss",chunks:["st","hover","towerup","lift","twin","crossing","orbit","ex"]},
+{w:21,name:"Frame",chunks:["st","towerup","crumbrun","flipwall","shaft","pit","lift","ex2"]},
+{w:21,name:"Shell",chunks:["st","leap","spring","chimney","climb","lock","hopline","ex"]},
+{w:21,name:"Skin",chunks:["st","thin","dip","teeth","sawspan","hover","ministep","ex"]},
+{w:22,name:"Tidal",chunks:["st","roof","spike","float","mesa","nook","ex"]},
+{w:22,name:"Lagrange",chunks:["st","pit","spike","pillar","gap","stair","float","ex"]},
+{w:22,name:"Roche",chunks:["st","roof","dip","thin","pillar","climb","stair","ex"]},
+{w:22,name:"Libration",chunks:["st","nook","gap","mesa","ministep","roof","ex"]},
+{w:22,name:"Pull",chunks:["st","pinch","lift2","zigrise","ferry","teethrun","ex"]},
+{w:22,name:"Sway",chunks:["st","bridge","wide","twin","crumbup","needle","chamf","ex"]},
+{w:22,name:"Swell",chunks:["st","zigrise","crumb","ice","slide","twin","ex2"]},
+{w:22,name:"Ebb",chunks:["st","chamf","lift","crumb","hover","pinch","orbit","ex"]},
+{w:22,name:"Flood",chunks:["st","crumbup","bridge","towerup","ice","lift2","ex"]},
+{w:22,name:"Neap",chunks:["st","dgap","phase","sawgap","mirror","blade","ex2"]},
+{w:22,name:"Spring Tide",chunks:["st","span","springpit","vault","updraft","ceil","ladder","teeth","ex2"]},
+{w:22,name:"Barycentre",chunks:["st","mirror","springpit","leap","dgap","blade","flipwall","ex"]},
+{w:22,name:"Wobble",chunks:["st","vault","span","updraft","phase","wide","sawspan","ex"]},
+{w:22,name:"Precess",chunks:["st","spring","lock","ferry","chimney","ceil","crossing","ex"]},
+{w:22,name:"Nutate",chunks:["st","flipwall","hopline","shaft","ladder","slide","needle","ex"]},
+{w:22,name:"Oscillate",chunks:["st","blade","sawgap","crumbrun","teethrun","phase","span","leap","ex"]},
+{w:22,name:"Resonance",chunks:["st","ceil","orbit","float","crossing","ferry","hover","ex2"]},
+{w:22,name:"Beat",chunks:["st","pinch","needle","springpit","gap","ladder","towerup","ex2"]},
+{w:22,name:"Phase Lock",chunks:["st","chimney","vault","hopline","lock","slide","mirror","lift2","ex2"]},
+{w:22,name:"Capture",chunks:["st","sawspan","updraft","crumbrun","spring","bridge","teethrun","sawgap","ex2"]},
+{w:23,name:"Apogee",chunks:["st","mesa","climb","nook","spike","stair","ex"]},
+{w:23,name:"Terminal",chunks:["st","dip","pit","thin","ministep","pillar","ex2"]},
+{w:23,name:"Reentry",chunks:["st","spike","ministep","stair","dip","roof","ex"]},
+{w:23,name:"Ablate",chunks:["st","thin","gap","float","pillar","pit","mesa","ex2"]},
+{w:23,name:"Corridor",chunks:["st","lift","wide","zigrise","twin","ice","ex"]},
+{w:23,name:"Skip",chunks:["st","crumb","crumbup","chamf","nook","ice","ex"]},
+{w:23,name:"Ballistic",chunks:["st","climb","ferry","chamf","slide","pinch","ex2"]},
+{w:23,name:"Parabola",chunks:["st","zigrise","teethrun","bridge","lift","hover","twin","ex2"]},
+{w:23,name:"Vertex",chunks:["st","wide","towerup","orbit","crumb","needle","lift2","ex"]},
+{w:23,name:"Culminate",chunks:["st","teeth","dgap","shaft","span","crumbrun","ex2"]},
+{w:23,name:"Peak",chunks:["st","vault","lock","spring","dgap","hopline","phase","mirror","ex2"]},
+{w:23,name:"Crest",chunks:["st","sawgap","crumbup","springpit","shaft","chimney","sawspan","blade","ex"]},
+{w:23,name:"Summit",chunks:["st","leap","flipwall","teeth","ceil","updraft","crossing","ladder","ex"]},
+{w:23,name:"Ceiling",chunks:["st","pit","mirror","sawspan","lift2","wide","dip","dgap","ex"]},
+{w:23,name:"Limit",chunks:["st","crossing","thin","updraft","shaft","pillar","chamf","ceil","ex"]},
+{w:23,name:"Edge",chunks:["st","lock","orbit","phase","roof","stair","leap","ex"]},
+{w:23,name:"Rim",chunks:["st","slide","sawgap","vault","hover","crumbrun","climb","chimney","ex2"]},
+{w:23,name:"Verge",chunks:["st","twin","ministep","ferry","towerup","span","flipwall","needle","ex"]},
+{w:23,name:"Brink",chunks:["st","bridge","float","ice","spring","blade","mesa","hopline","ex"]},
+{w:23,name:"Last Orbit",chunks:["st","ladder","springpit","zigrise","teeth","crumb","teethrun","nook","ex"]},
+{w:24,name:"Threshold",chunks:["st","gap","spike","pgate","thin","roof","pit","ex"]},
+{w:24,name:"Doorway",chunks:["st","ministep","float","pdrop","nook","pillar","ex"]},
+{w:24,name:"Aperture",chunks:["st","stair","mesa","ploop","pgate","gap","ex"]},
+{w:24,name:"Iris",chunks:["st","pillar","thin","pgate","climb","spike","ex2"]},
+{w:24,name:"Gate",chunks:["st","hover","lift","ploop","crumbup","pgate","teethrun","ex2"]},
+{w:24,name:"Frame",chunks:["st","orbit","pinch","ploop","bridge","needle","ferry","ex2"]},
+{w:24,name:"Jamb",chunks:["st","ice","wide","pgate","towerup","crumb","dip","ex"]},
+{w:24,name:"Sill",chunks:["st","chamf","pinch","pdrop","zigrise","lift2","lift","ex"]},
+{w:24,name:"Lintel",chunks:["st","ferry","crumbup","ploop","twin","slide","ex"]},
+{w:24,name:"Casement",chunks:["st","flipwall","span","pdrop","leap","vault","ex2"]},
+{w:24,name:"Opening",chunks:["st","mirror","crumbrun","pdrop","lock","ploop","spring","ex2"]},
+{w:24,name:"Mouth",chunks:["st","springpit","phase","pgate","sawspan","chimney","blade","ladder","ex"]},
+{w:24,name:"Portal",chunks:["st","dgap","crossing","pdrop","ceil","ploop","sawgap","updraft","ex"]},
+{w:24,name:"Passage",chunks:["st","hopline","teeth","pdrop","shaft","sawgap","sawspan","nook","ex"]},
+{w:24,name:"Transom",chunks:["st","blade","pit","ploop","leap","pdrop","dip","ex"]},
+{w:24,name:"Arch",chunks:["st","needle","teethrun","pdrop","hopline","ploop","phase","ex"]},
+{w:24,name:"Span",chunks:["st","updraft","bridge","ploop","mirror","pgate","crumbrun","ex"]},
+{w:24,name:"Reveal",chunks:["st","span","vault","pgate","crossing","spring","ice","ex"]},
+{w:24,name:"Recess",chunks:["st","shaft","springpit","pdrop","twin","pgate","ladder","ex"]},
+{w:24,name:"Return",chunks:["st","towerup","teeth","pgate","dgap","slide","crumbup","flipwall","ex"]},
+{w:25,name:"Paired",chunks:["st","roof","climb","pdrop","float","spike","ex"]},
+{w:25,name:"Twinned",chunks:["st","float","ministep","ploop","stair","pdrop","gap","ex"]},
+{w:25,name:"Coupled",chunks:["st","mesa","roof","ploop","nook","stair","ministep","ex"]},
+{w:25,name:"Bonded",chunks:["st","climb","mesa","ploop","spike","dip","ex"]},
+{w:25,name:"Mated",chunks:["st","lift2","crumb","pdrop","pinch","wide","chamf","ex"]},
+{w:25,name:"Linked",chunks:["st","teethrun","zigrise","pgate","hover","pdrop","orbit","ex"]},
+{w:25,name:"Joined",chunks:["st","lift","slide","pgate","pit","twin","wide","ex"]},
+{w:25,name:"Tied",chunks:["st","crumbup","orbit","pdrop","hover","ferry","crumb","ex"]},
+{w:25,name:"Bound",chunks:["st","pinch","chamf","pdrop","bridge","zigrise","ex"]},
+{w:25,name:"Matched",chunks:["st","spring","ceil","ploop","lock","needle","chimney","ex"]},
+{w:25,name:"Mirror Pair",chunks:["st","phase","ladder","ploop","updraft","gap","dgap","ex"]},
+{w:25,name:"Conjugate",chunks:["st","crumbrun","sawgap","ploop","sawspan","pdrop","teeth","ex"]},
+{w:25,name:"Duet",chunks:["st","crossing","hopline","ploop","thin","ice","lift","ex2"]},
+{w:25,name:"Dyad",chunks:["st","shaft","blade","ploop","chimney","pgate","pillar","ex"]},
+{w:25,name:"Two-Up",chunks:["st","lock","mirror","pgate","span","lift2","vault","ceil","ex2"]},
+{w:25,name:"Both Ends",chunks:["st","leap","towerup","pgate","springpit","ploop","flipwall","crumbrun","ex2"]},
+{w:25,name:"Either Side",chunks:["st","slide","span","pdrop","thin","needle","dgap","ex"]},
+{w:25,name:"In Phase",chunks:["st","blade","teeth","pgate","sawgap","phase","nook","ex"]},
+{w:25,name:"Out of Phase",chunks:["st","spike","hopline","ploop","orbit","flipwall","ceil","springpit","ex"]},
+{w:25,name:"Handshake",chunks:["st","teethrun","mirror","pdrop","crossing","chimney","leap","ex2"]},
+{w:26,name:"Recursion",chunks:["st","pillar","mesa","pgate","pdrop","ministep","ex"]},
+{w:26,name:"Base Case",chunks:["st","pit","climb","pdrop","roof","gap","ex"]},
+{w:26,name:"Stack Frame",chunks:["st","stair","gap","pdrop","ploop","float","ex"]},
+{w:26,name:"Tail Call",chunks:["st","dip","mesa","ploop","pgate","ministep","ex"]},
+{w:26,name:"Depth",chunks:["st","wide","lift2","ploop","hover","chamf","ex2"]},
+{w:26,name:"Descent",chunks:["st","ferry","zigrise","pgate","pdrop","crumbup","ex2"]},
+{w:26,name:"Unwind",chunks:["st","crumb","lift","pgate","twin","towerup","ex2"]},
+{w:26,name:"Reentrant",chunks:["st","ice","pinch","pgate","bridge","ploop","climb","ex"]},
+{w:26,name:"Self",chunks:["st","thin","lift","ploop","pdrop","teethrun","ex"]},
+{w:26,name:"Loop Back",chunks:["st","vault","sawspan","pgate","ploop","shaft","ex"]},
+{w:26,name:"Fixed Point",chunks:["st","ladder","spring","pgate","updraft","lock","stair","ex"]},
+{w:26,name:"Iterate",chunks:["st","springpit","pit","pgate","ice","pdrop","wide","ex"]},
+{w:26,name:"Fold",chunks:["st","towerup","dip","pdrop","slide","pgate","shaft","chamf","ex2"]},
+{w:26,name:"Unfold",chunks:["st","flipwall","pinch","pdrop","updraft","needle","phase","ex"]},
+{w:26,name:"Nest",chunks:["st","span","chimney","ploop","dgap","ferry","sawspan","ex"]},
+{w:26,name:"Inner",chunks:["st","nook","crossing","pgate","orbit","pdrop","sawgap","lift2","ex"]},
+{w:26,name:"Outer",chunks:["st","hopline","ceil","pgate","zigrise","crumbrun","vault","crumb","ex"]},
+{w:26,name:"Return Value",chunks:["st","hover","spring","pdrop","ladder","twin","mirror","ex2"]},
+{w:26,name:"Overflow",chunks:["st","bridge","pillar","pdrop","blade","pgate","spike","ex"]},
+{w:26,name:"Halt",chunks:["st","teeth","roof","pdrop","lift2","lock","leap","ex"]},
+{w:27,name:"Exit",chunks:["st","float","stair","pgate","pdrop","mesa","ex2"]},
+{w:27,name:"One Way",chunks:["st","ministep","thin","pgate","float","pit","roof","ex"]},
+{w:27,name:"No Return",chunks:["st","gap","pillar","pdrop","spike","climb","ministep","ex"]},
+{w:27,name:"Last Door",chunks:["st","dip","nook","pgate","ploop","pit","ex"]},
+{w:27,name:"Final Jamb",chunks:["st","orbit","bridge","pgate","crumbup","wide","teethrun","ex"]},
+{w:27,name:"Terminus",chunks:["st","chamf","crumbup","ploop","zigrise","needle","ex2"]},
+{w:27,name:"Egress",chunks:["st","twin","pinch","ploop","pdrop","ferry","ex"]},
+{w:27,name:"Out",chunks:["st","lift2","hover","ploop","towerup","slide","ex2"]},
+{w:27,name:"Away",chunks:["st","zigrise","lift","pgate","ploop","crumb","ex2"]},
+{w:27,name:"Beyond",chunks:["st","sawspan","spring","pdrop","flipwall","crossing","ex"]},
+{w:27,name:"Past It",chunks:["st","updraft","dgap","pdrop","crumbrun","shaft","ceil","ex"]},
+{w:27,name:"Clear",chunks:["st","chimney","mirror","ploop","ice","leap","span","ex"]},
+{w:27,name:"Free",chunks:["st","phase","vault","pdrop","springpit","lock","sawgap","ex2"]},
+{w:27,name:"Gone",chunks:["st","crumbrun","blade","pdrop","span","ploop","ladder","ex"]},
+{w:27,name:"Vanish",chunks:["st","spring","teeth","pgate","hopline","climb","hover","leap","ex"]},
+{w:27,name:"Depart",chunks:["st","mirror","dgap","ploop","gap","shaft","hopline","ex"]},
+{w:27,name:"Leave",chunks:["st","sawgap","springpit","pdrop","stair","chamf","updraft","ex"]},
+{w:27,name:"Quit",chunks:["st","needle","flipwall","ploop","dip","pdrop","towerup","ex"]},
+{w:27,name:"Close",chunks:["st","ceil","lift","ploop","vault","wide","chimney","ex"]},
+{w:27,name:"Shut",chunks:["st","dgap","teethrun","pgate","phase","crumbup","crossing","blade","ex"]},
+{w:28,name:"Syntax",chunks:["st","thin","mesa","spike","nook","float","ex"]},
+{w:28,name:"Token",chunks:["st","roof","nook","climb","pillar","dip","gap","ex"]},
+{w:28,name:"Lexeme",chunks:["st","spike","pit","float","thin","stair","ex"]},
+{w:28,name:"Parse",chunks:["st","ministep","nook","thin","pit","gap","dip","ex2"]},
+{w:28,name:"Grammar",chunks:["st","slide","bridge","pinch","ferry","orbit","ex2"]},
+{w:28,name:"Symbol",chunks:["st","crumb","twin","needle","ice","roof","ex"]},
+{w:28,name:"Literal",chunks:["st","bridge","twin","ferry","wide","crumb","chamf","ex"]},
+{w:28,name:"Operand",chunks:["st","ice","towerup","zigrise","orbit","teethrun","slide","ex"]},
+{w:28,name:"Operator",chunks:["st","mesa","pillar","hover","crumbup","lift","pinch","ex2"]},
+{w:28,name:"Statement",chunks:["st","sawspan","lock","teeth","ladder","blade","ex"]},
+{w:28,name:"Expression",chunks:["st","crossing","mirror","leap","shaft","teeth","flipwall","ex"]},
+{w:28,name:"Block",chunks:["st","phase","lock","sawspan","hopline","lift2","springpit","crumbrun","ex2"]},
+{w:28,name:"Scope",chunks:["st","ladder","ceil","vault","chimney","sawgap","span","ex2"]},
+{w:28,name:"Binding",chunks:["st","spring","updraft","springpit","ice","teeth","orbit","ex"]},
+{w:28,name:"Declare",chunks:["st","vault","pillar","bridge","crossing","needle","lock","ex2"]},
+{w:28,name:"Assign",chunks:["st","chamf","chimney","lift","phase","ministep","sawgap","ex"]},
+{w:28,name:"Branch",chunks:["st","blade","updraft","stair","twin","span","hover","ex"]},
+{w:28,name:"Guard",chunks:["st","ferry","hopline","flipwall","spring","leap","teethrun","sawspan","ex"]},
+{w:28,name:"Clause",chunks:["st","crumbup","crumb","ceil","lift2","float","roof","ex"]},
+{w:28,name:"Term",chunks:["st","pinch","towerup","wide","slide","ladder","dgap","ex"]},
+{w:29,name:"Compile",chunks:["st","climb","roof","mesa","gap","pit","ex"]},
+{w:29,name:"Lower",chunks:["st","pillar","stair","spike","mesa","thin","ex"]},
+{w:29,name:"Optimise",chunks:["st","nook","dip","spike","ministep","climb","ex"]},
+{w:29,name:"Inline",chunks:["st","float","gap","nook","ministep","dip","ex"]},
+{w:29,name:"Unroll",chunks:["st","zigrise","hover","bridge","ferry","needle","ex2"]},
+{w:29,name:"Constant Fold",chunks:["st","lift","towerup","chamf","twin","teethrun","pinch","ex"]},
+{w:29,name:"Dead Code",chunks:["st","wide","climb","slide","lift2","orbit","ice","ex2"]},
+{w:29,name:"Emit",chunks:["st","lift2","crumbup","zigrise","chamf","crumb","ex2"]},
+{w:29,name:"Link",chunks:["st","twin","pillar","slide","ferry","bridge","ex"]},
+{w:29,name:"Symbol Table",chunks:["st","shaft","mirror","hopline","vault","crumbrun","ceil","ex"]},
+{w:29,name:"Relocate",chunks:["st","sawgap","flipwall","sawspan","crossing","teeth","updraft","ex2"]},
+{w:29,name:"Assemble",chunks:["st","lock","span","spring","springpit","blade","shaft","crumbrun","ex"]},
+{w:29,name:"Object",chunks:["st","chimney","phase","leap","ladder","mirror","stair","ex2"]},
+{w:29,name:"Archive",chunks:["st","dgap","ladder","pit","leap","sawspan","teethrun","ex2"]},
+{w:29,name:"Strip",chunks:["st","span","roof","crumbrun","towerup","spring","lift","ceil","ex"]},
+{w:29,name:"Mangle",chunks:["st","springpit","teeth","mirror","phase","blade","orbit","chimney","ex"]},
+{w:29,name:"Pass",chunks:["st","hopline","sawgap","mesa","crossing","vault","spike","ex"]},
+{w:29,name:"Target",chunks:["st","updraft","float","pinch","ice","thin","zigrise","ex"]},
+{w:29,name:"Backend",chunks:["st","flipwall","crumb","lock","crumbup","shaft","hover","dgap","ex"]},
+{w:29,name:"Binary",chunks:["st","needle","float","wide","updraft","dip","flipwall","ex2"]},
+{w:30,name:"Runtime",chunks:["st","stair","roof","ministep","spike","pillar","ex"]},
+{w:30,name:"Heap",chunks:["st","gap","thin","climb","float","mesa","dip","ex2"]},
+{w:30,name:"Stack",chunks:["st","pit","ministep","nook","mesa","float","ex"]},
+{w:30,name:"Register",chunks:["st","roof","pillar","ministep","pit","gap","climb","ex"]},
+{w:30,name:"Frame Pointer",chunks:["st","towerup","teethrun","ferry","pinch","slide","crumb","ex"]},
+{w:30,name:"Allocate",chunks:["st","orbit","zigrise","wide","lift","lift2","ex"]},
+{w:30,name:"Collect",chunks:["st","hover","ice","chamf","bridge","crumbup","twin","ex"]},
+{w:30,name:"Mark",chunks:["st","teethrun","wide","needle","nook","towerup","ex2"]},
+{w:30,name:"Sweep",chunks:["st","lift","crumbup","lift2","thin","ferry","ex"]},
+{w:30,name:"Free",chunks:["st","mirror","shaft","lock","springpit","crossing","ex2"]},
+{w:30,name:"Leak",chunks:["st","ceil","dgap","span","blade","phase","spring","ex"]},
+{w:30,name:"Dangling",chunks:["st","crumbrun","chimney","teeth","vault","ladder","sawgap","ex2"]},
+{w:30,name:"Segfault",chunks:["st","leap","hopline","sawspan","spike","crossing","chamf","ex"]},
+{w:30,name:"Trap",chunks:["st","teeth","slide","hopline","needle","bridge","leap","pinch","ex"]},
+{w:30,name:"Signal",chunks:["st","hover","ladder","ice","mirror","sawgap","chimney","ex"]},
+{w:30,name:"Interrupt",chunks:["st","flipwall","blade","lock","dgap","springpit","orbit","ex"]},
+{w:30,name:"Yield",chunks:["st","phase","shaft","sawspan","span","twin","crumbrun","ex"]},
+{w:30,name:"Await",chunks:["st","ceil","spring","vault","zigrise","stair","updraft","ex"]},
+{w:30,name:"Thread",chunks:["st","crumb","bridge","spring","shaft","stair","span","ex"]},
+{w:30,name:"Race",chunks:["st","vault","orbit","gap","teethrun","dgap","pit","crumbrun","ex"]},
+{w:31,name:"Deploy",chunks:["st","dip","climb","gap","ministep","mesa","spike","ex"]},
+{w:31,name:"Ship",chunks:["st","pillar","nook","thin","roof","dip","ex"]},
+{w:31,name:"Rollout",chunks:["st","stair","nook","spike","float","climb","ex"]},
+{w:31,name:"Canary",chunks:["st","mesa","roof","thin","pillar","pit","stair","ex"]},
+{w:31,name:"Blue Green",chunks:["st","slide","towerup","twin","lift2","ice","ex"]},
+{w:31,name:"Rollback",chunks:["st","pinch","hover","wide","ferry","lift","ex"]},
+{w:31,name:"Hotfix",chunks:["st","chamf","zigrise","crumbup","teethrun","hover","ex"]},
+{w:31,name:"Patch",chunks:["st","needle","crumb","orbit","lift","chamf","ex"]},
+{w:31,name:"Release",chunks:["st","wide","pinch","zigrise","slide","ice","ex"]},
+{w:31,name:"Tag",chunks:["st","ladder","flipwall","lock","ceil","mirror","ex2"]},
+{w:31,name:"Bump",chunks:["st","crossing","springpit","chimney","hopline","leap","sawgap","ex"]},
+{w:31,name:"Freeze",chunks:["st","teeth","phase","updraft","sawspan","crumbup","blade","ex"]},
+{w:31,name:"Cut",chunks:["st","sawspan","ferry","lock","crumbrun","hopline","crossing","ex2"]},
+{w:31,name:"Publish",chunks:["st","springpit","dgap","ceil","leap","teeth","twin","ex"]},
+{w:31,name:"Live",chunks:["st","spring","lift2","phase","towerup","mirror","updraft","ex"]},
+{w:31,name:"Prod",chunks:["st","blade","bridge","shaft","flipwall","chimney","span","ex"]},
+{w:31,name:"Smoke Test",chunks:["st","sawgap","ladder","crumb","float","needle","mesa","teethrun","ex2"]},
+{w:31,name:"Health",chunks:["st","span","shaft","lift2","dgap","teeth","spike","updraft","ex"]},
+{w:31,name:"Uptime",chunks:["st","lock","pit","wide","ladder","chimney","slide","ex2"]},
+{w:31,name:"Postmortem",chunks:["st","ministep","flipwall","zigrise","bridge","phase","twin","ex"]},
+{w:32,name:"Dawn",chunks:["st","climb","mesa","float","nook","roof","ex2"]},
+{w:32,name:"First Light",chunks:["st","thin","gap","dip","pillar","stair","climb","ex"]},
+{w:32,name:"Sunrise",chunks:["st","nook","pillar","gap","pit","thin","ex"]},
+{w:32,name:"Glimmer",chunks:["st","float","roof","mesa","ministep","dip","ex"]},
+{w:32,name:"Gleam",chunks:["st","ferry","ice","crumb","pinch","lift","ex"]},
+{w:32,name:"Pale",chunks:["st","crumbup","slide","orbit","towerup","needle","ex"]},
+{w:32,name:"Wash",chunks:["st","spike","chamf","orbit","wide","hover","zigrise","ex2"]},
+{w:32,name:"Bleach",chunks:["st","twin","bridge","chamf","ice","ferry","ex"]},
+{w:32,name:"Blanch",chunks:["st","lift2","pinch","teethrun","lift","needle","ex"]},
+{w:32,name:"Bright",chunks:["st","crumbrun","springpit","spring","sawgap","leap","ex"]},
+{w:32,name:"Clear",chunks:["st","mirror","crossing","ceil","hopline","blade","vault","ex2"]},
+{w:32,name:"Open",chunks:["st","leap","blade","span","phase","sawspan","teeth","ex"]},
+{w:32,name:"Airy",chunks:["st","updraft","crumbup","crumbrun","crumb","shaft","spring","ex2"]},
+{w:32,name:"Chalk",chunks:["st","hopline","mirror","lock","crossing","sawgap","dgap","ex"]},
+{w:32,name:"Bone",chunks:["st","chimney","springpit","flipwall","towerup","sawspan","ladder","ex"]},
+{w:32,name:"Ivory",chunks:["st","shaft","pinch","ceil","zigrise","vault","roof","ex2"]},
+{w:32,name:"Linen",chunks:["st","teethrun","dip","hover","vault","flipwall","nook","ex2"]},
+{w:32,name:"Paper",chunks:["st","bridge","dgap","ice","chimney","spring","wide","ex"]},
+{w:32,name:"Milk",chunks:["st","gap","lift","ladder","float","slide","springpit","ex"]},
+{w:32,name:"Snow",chunks:["st","pit","ceil","lock","spike","twin","phase","ex"]},
+{w:33,name:"Glare",chunks:["st","ministep","thin","stair","pillar","mesa","climb","ex2"]},
+{w:33,name:"Dazzle",chunks:["st","climb","nook","gap","float","pit","mesa","ex"]},
+{w:33,name:"Flare",chunks:["st","thin","spike","roof","ministep","stair","ex"]},
+{w:33,name:"Blaze",chunks:["st","pillar","dip","float","stair","thin","ex"]},
+{w:33,name:"Shine",chunks:["st","orbit","needle","crumbup","ferry","spike","towerup","ex2"]},
+{w:33,name:"Sheen",chunks:["st","ice","twin","lift","teethrun","lift2","chamf","ex"]},
+{w:33,name:"Gloss",chunks:["st","zigrise","towerup","crumbup","hover","crumb","ex"]},
+{w:33,name:"Polish",chunks:["st","towerup","bridge","crumb","lift2","needle","ex"]},
+{w:33,name:"Burnish",chunks:["st","wide","pit","ferry","mesa","orbit","ex"]},
+{w:33,name:"Reflect",chunks:["st","dgap","crumbrun","span","sawgap","hopline","ex2"]},
+{w:33,name:"Refract",chunks:["st","sawspan","leap","updraft","mirror","teeth","blade","ex"]},
+{w:33,name:"Scatter",chunks:["st","crossing","sawspan","sawgap","slide","phase","pinch","hopline","ex"]},
+{w:33,name:"Diffuse",chunks:["st","springpit","mirror","spring","crumbrun","leap","chimney","chamf","ex"]},
+{w:33,name:"Bloom",chunks:["st","updraft","teeth","lock","shaft","crossing","flipwall","ladder","ex"]},
+{w:33,name:"Halo",chunks:["st","span","ceil","hover","blade","mirror","vault","ex"]},
+{w:33,name:"Corona",chunks:["st","sawgap","wide","crossing","dip","bridge","ministep","sawspan","ex2"]},
+{w:33,name:"Ray",chunks:["st","shaft","phase","climb","teeth","teethrun","vault","ex2"]},
+{w:33,name:"Beam",chunks:["st","chimney","orbit","springpit","crumb","flipwall","updraft","ex"]},
+{w:33,name:"Shaft",chunks:["st","gap","spring","ferry","crumbrun","pinch","pillar","crumbup","ex"]},
+{w:33,name:"Column",chunks:["st","leap","zigrise","dgap","nook","hopline","ladder","lift","ex2"]},
+{w:34,name:"Noon",chunks:["st","roof","climb","pit","float","gap","ex2"]},
+{w:34,name:"Zenith",chunks:["st","nook","ministep","spike","stair","dip","pillar","ex"]},
+{w:34,name:"Overhead",chunks:["st","mesa","thin","nook","stair","roof","ex2"]},
+{w:34,name:"No Shadow",chunks:["st","pit","roof","float","ministep","pillar","thin","ex"]},
+{w:34,name:"Full Sun",chunks:["st","ice","bridge","slide","zigrise","gap","ex"]},
+{w:34,name:"High Light",chunks:["st","twin","orbit","slide","lift","ice","ex"]},
+{w:34,name:"Meridian",chunks:["st","chamf","lift2","twin","zigrise","dip","needle","ex"]},
+{w:34,name:"Apex",chunks:["st","ferry","lift2","towerup","hover","needle","ex"]},
+{w:34,name:"Overexpose",chunks:["st","teethrun","crumbup","climb","chamf","wide","ex"]},
+{w:34,name:"Blown Out",chunks:["st","ceil","span","lock","crumb","blade","pinch","ex2"]},
+{w:34,name:"Clipped",chunks:["st","hopline","updraft","flipwall","mirror","span","ladder","ex"]},
+{w:34,name:"Saturate",chunks:["st","phase","dgap","chimney","crossing","crumbrun","sawspan","ex2"]},
+{w:34,name:"Burn In",chunks:["st","blade","leap","lock","vault","springpit","sawgap","ex"]},
+{w:34,name:"White Point",chunks:["st","teeth","shaft","crumb","spring","pinch","updraft","ex"]},
+{w:34,name:"Highlight",chunks:["st","lock","wide","ceil","chamf","vault","dgap","ex2"]},
+{w:34,name:"Specular",chunks:["st","flipwall","crumbup","teeth","chimney","crumbrun","ice","span","ex"]},
+{w:34,name:"Direct",chunks:["st","ladder","teethrun","ceil","phase","slide","sawspan","twin","ex"]},
+{w:34,name:"Hard Light",chunks:["st","spring","mirror","needle","sawgap","spike","leap","lift2","ex"]},
+{w:34,name:"Contrast",chunks:["st","towerup","shaft","bridge","springpit","lift","blade","ex"]},
+{w:34,name:"Relief",chunks:["st","hover","crossing","mesa","ferry","sawgap","orbit","ex"]},
+{w:35,name:"Whiteout",chunks:["st","dip","stair","gap","nook","pit","ex2"]},
+{w:35,name:"Snowblind",chunks:["st","spike","thin","float","pillar","climb","ministep","ex"]},
+{w:35,name:"Fog",chunks:["st","float","dip","roof","nook","climb","ex"]},
+{w:35,name:"Mist",chunks:["st","stair","mesa","pillar","spike","pit","ex"]},
+{w:35,name:"Haze",chunks:["st","slide","mesa","bridge","ice","orbit","ex"]},
+{w:35,name:"Veil",chunks:["st","zigrise","roof","chamf","hover","slide","ex"]},
+{w:35,name:"Shroud",chunks:["st","crumbup","thin","twin","gap","needle","ex"]},
+{w:35,name:"Blank",chunks:["st","lift2","ferry","ministep","teethrun","towerup","ex"]},
+{w:35,name:"Erase",chunks:["st","crumb","ferry","roof","lift","orbit","ex"]},
+{w:35,name:"Empty",chunks:["st","vault","crossing","wide","hopline","crumbrun","ex2"]},
+{w:35,name:"Null",chunks:["st","dgap","sawspan","springpit","pinch","spring","ladder","leap","ex"]},
+{w:35,name:"Nothing",chunks:["st","mirror","ceil","chimney","flipwall","phase","teeth","lift","ex2"]},
+{w:35,name:"Absence",chunks:["st","needle","span","hopline","chimney","shaft","wide","blade","ex2"]},
+{w:35,name:"Silence",chunks:["st","pinch","lock","teethrun","updraft","hopline","chamf","ex2"]},
+{w:35,name:"Still",chunks:["st","bridge","updraft","hover","teeth","crossing","dgap","zigrise","ex2"]},
+{w:35,name:"Last Light",chunks:["st","crumbrun","crumbup","phase","flipwall","twin","springpit","ex"]},
+{w:35,name:"Fade",chunks:["st","orbit","span","towerup","leap","ceil","shaft","ex"]},
+{w:35,name:"Dissolve",chunks:["st","lift","sawgap","crumb","mirror","ice","sawspan","ex"]},
+{w:35,name:"Vanish",chunks:["st","ladder","vault","spring","phase","lift2","blade","ex2"]},
+{w:35,name:"White",chunks:["st","lock","lift2","flipwall","thin","wide","springpit","ex2"]}
 ];
 
 /* ------------------------------ tuning ------------------------------ */
@@ -1150,7 +1620,7 @@ function loadLevel(i){
   COLS=seg.length*CW;
   G.grid=[];
   for(let y=0;y<ROWS;y++){ let row=''; for(const c of seg) row+=c.t[y]; G.grid.push(row.split('')); }
-  G.gems=[]; G.keys=[]; G.movers=[]; G.saws=[]; G.checks=[];
+  G.gems=[]; G.keys=[]; G.movers=[]; G.saws=[]; G.checks=[]; G.portA=[]; G.portB=[];
   seg.forEach((c,k)=>{
     const ox=k*CW;
     (c.m||[]).forEach(m=>G.movers.push({
@@ -1165,7 +1635,8 @@ function loadLevel(i){
                         spd:sw.spd*TS/60,t:sw.ph||0,x:(sw.ax+ox)*TS,y:sw.ay*TS,r:10});
     });
     // a datum every other segment, never in the first or last
-    if(!MOD.nodatum && k>=2 && k%2===0 && k<seg.length-1) G.grid[14][ox+1]='C';
+    const _dv=MOD.sparse?4:2;
+    if(!MOD.nodatum && k>=2 && k%_dv===0 && k<seg.length-1) G.grid[14][ox+1]='C';
   });
   if(L.zones){                       /* one datum per act, exactly on the boundary */
     G.zones=L.zones.map(z=>Object.assign({},z,{x0:z.at*CW*TS}));
@@ -1179,6 +1650,8 @@ function loadLevel(i){
     else if(ch==='K'){ G.keys.push({x:x*TS+TS/2,y:y*TS+TS/2,got:0}); G.grid[y][x]='.'; }
     else if(ch==='C'){ G.checks.push({x:x*TS+TS/2, y:y*TS+TS/2, on:0,
                         sx:x*TS+(TS-PW)/2, sy:14*TS+(TS-PH)}); G.grid[y][x]='.'; }
+    else if(ch==='p'){ G.portA.push({x:x*TS+TS/2,y:y*TS+TS/2}); G.grid[y][x]='.'; }
+    else if(ch==='q'){ G.portB.push({x:x*TS+TS/2,y:y*TS+TS/2}); G.grid[y][x]='.'; }
   }
   G.partsTotal=G.gems.length;
   G.parts=0; G.deaths=0; G.time=0; G.won=0; G.banner=110;
@@ -1199,7 +1672,7 @@ function loadLevel(i){
   G.driftK=MOD.drift||1;
   if(MOD.chaos) for(const m of G.movers) if(m.loose) m.faller=1;
   G.rmode=MOD.render||'normal'; G.allParts=!!MOD.allparts;
-  G.chaos=MOD.chaos||0; G.chaosT=200;
+  G.chaos=MOD.chaos||0; G.chaosT=200; G.gscale=MOD.gravity||1; G.portLock=0;
   G.liveDraw=!!MOD.livedraw; G.zoneI=-1;
   G.split=0; G.splitAmt=0; G.floorWarn=0; G.floorGone=0; G.invT=0;
   G.eatOn=!!MOD.eat; G.eatSpd=MOD.eat||0;
@@ -1524,8 +1997,9 @@ function step(){
       if(G.tick%4===0) G.fx.push({x:P.x+(ws>0?PW:0),y:P.y+Math.random()*PH,vx:0,vy:-0.6*P.g,life:14,c:'#3A5A75',sz:1.4});
     }
 
-    P.vy+=GRAV*P.g;
-    if(P.vy>MAXFALL) P.vy=MAXFALL; if(P.vy<-MAXFALL) P.vy=-MAXFALL;
+    P.vy+=GRAV*P.g*(G.gscale||1);
+    const mf=MAXFALL*Math.max(0.62,G.gscale||1);
+    if(P.vy>mf) P.vy=mf; if(P.vy<-mf) P.vy=-mf;
   }
 
   /* updraft */
@@ -1557,6 +2031,24 @@ function step(){
       k.got=1; SFX.key();
       for(let i=0;i<10;i++){ const a=Math.random()*6.28; G.fx.push({x:k.x,y:k.y,vx:Math.cos(a)*2.4,vy:Math.sin(a)*2.4,life:22,c:'#FFC94D',sz:1.8}); }
       if(G.keys.every(q=>q.got)){ G.doorOpen=true; flash('DOOR RELEASED'); G.shake=5; }
+    }
+  }
+
+  /* portals — latched, so landing on the far door does not throw you back */
+  if(G.portA.length){
+    const nn=Math.min(G.portA.length,G.portB.length);
+    let touching=false, dest=null;
+    for(let i=0;i<nn;i++){
+      const pa=G.portA[i], pb=G.portB[i];
+      if(Math.abs(pa.x-px)<15 && Math.abs(pa.y-py)<17){ touching=true; if(!dest) dest=pb; }
+      else if(Math.abs(pb.x-px)<15 && Math.abs(pb.y-py)<17){ touching=true; if(!dest) dest=pa; }
+    }
+    if(!touching) G.portLock=0;
+    if(dest && !G.portLock){
+      P.x=dest.x-PW/2; P.y=dest.y-PH/2; G.portLock=1; G.cam=camTarget();
+      SFX.flip(); G.shake=4;
+      for(let z=0;z<14;z++){ const an=Math.random()*6.28;
+        G.fx.push({x:dest.x,y:dest.y,vx:Math.cos(an)*2.6,vy:Math.sin(an)*2.6,life:22,sz:1.6,c:"#A78BFA"}); }
     }
   }
 
@@ -2367,6 +2859,21 @@ function drawExtrude(cam){
     }
   }
 }
+function drawCode(cam){
+  const gl='01{}()[];=<>+-*/&|!~^';
+  const k0=Math.max(0,Math.floor(cam/TS)-1), k1=Math.min(COLS-1,Math.floor((cam+VW)/TS)+1);
+  ctx.font='700 15px ui-monospace,monospace'; ctx.textAlign='center';
+  for(let cy=0;cy<ROWS;cy++) for(let cx=k0;cx<=k1;cx++){
+    const ch=G.grid[cy][cx]; if(ch==='.') continue;
+    if(G.drawMask && !G.drawMask.has(cy*COLS+cx)) continue;
+    const haz='^v<>'.includes(ch);
+    ctx.fillStyle = haz? C.haz : (ch==='~'? '#4CC9E8' : (ch==='S'? '#8FA8BC' : '#57D98A'));
+    ctx.fillText(haz?'!':gl[(cx*7+cy*13+ch.charCodeAt(0))%gl.length], cx*TS+TS/2, cy*TS+TS/2+5);
+  }
+  ctx.textAlign='left';
+  ctx.font='600 9px ui-monospace,monospace'; ctx.fillStyle='rgba(87,217,138,.25)';
+  for(let cy=0;cy<ROWS;cy+=2) ctx.fillText(String(cy).padStart(3,'0'), cam+6, cy*TS+16);
+}
 function drawGlitch(cam){
   /* the machine it lives on is coming apart */
   const t=G.tick;
@@ -2478,6 +2985,18 @@ function drawPlayer(){
     ctx.strokeStyle='rgba(76,201,232,.55)'; ctx.lineWidth=1; dash(false);
     ctx.beginPath(); ctx.arc(cx,y+h/2,13,0,6.2832); ctx.stroke();
   }
+  if((G.gscale||1)<0.9){                       /* space: a little thrust */
+    const fl=6+Math.sin(G.tick/3)*3;
+    ctx.fillStyle='rgba(76,201,232,.55)';
+    ctx.beginPath(); ctx.moveTo(cx-3,y+h); ctx.lineTo(cx+3,y+h); ctx.lineTo(cx,y+h+fl);
+    ctx.closePath(); ctx.fill();
+  }
+  if(G.rmode==='code'){                        /* code: you are the caret */
+    ctx.fillStyle=(Math.floor(G.tick/16)%2)?'#57D98A':'rgba(87,217,138,.35)';
+    ctx.fillRect(cx-4, y-1, 8, h+2);
+    ctx.fillStyle='#0A0F16'; ctx.fillRect(cx-1,y+3,2,h-6);
+    return;
+  }
   ctx.fillStyle=C.accent; rr(x,y,w,h,3); ctx.fill();
   ctx.fillStyle='rgba(10,15,22,.55)'; rr(x+2.5,y+2.5,w-5,h-5,2); ctx.fill();
   ctx.strokeStyle='#FFD9C0'; ctx.lineWidth=1;
@@ -2537,6 +3056,23 @@ function drawOverlayText(){
     ctx.globalAlpha=1; ctx.textAlign='left';
   }
 }
+function drawPortals(){
+  if(!G.portA||!G.portA.length) return;
+  const nn=Math.min(G.portA.length,G.portB.length);
+  for(let i=0;i<nn;i++){
+    for(const [pt,col] of [[G.portA[i],C.mirror],[G.portB[i],'#4CC9E8']]){
+      ctx.save(); ctx.translate(pt.x,pt.y); ctx.rotate(G.tick/26);
+      ctx.strokeStyle=col; ctx.lineWidth=1.6; dash(false);
+      for(let k=0;k<3;k++){
+        ctx.beginPath();
+        ctx.ellipse(0,0,12-k*3,7-k*2,k*1.05,0,6.2832);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.fillStyle=col; ctx.fillRect(pt.x-1.5,pt.y-1.5,3,3);
+    }
+  }
+}
 function drawChecks(){
   for(const c of G.checks){
     const on=c.on, col=on?C.datum:'rgba(94,143,181,.45)';
@@ -2571,7 +3107,9 @@ function drawProgress(){
   ctx.fillStyle=C.accent; ctx.fillRect(mx-1.5,y-4,3,8);
 }
 function drawSheet(cam){
-  if(G.rmode==='flat'||G.rmode==='drawn'){
+  if(G.rmode==='code'){
+    drawCode(cam); drawMovers(); drawChecks(); drawPickups(); drawSaws();
+  } else if(G.rmode==='flat'||G.rmode==='drawn'){
     drawFlatLines(cam); drawMovers(); drawChecks(); drawPickups(); drawSaws();
   } else {
     if(G.rmode==='extrude'||G.cutEx) drawExtrude(cam, G.cutEx||undefined);
@@ -2616,7 +3154,13 @@ function draw(){
   if(sq>0) ctx.restore();
   drawFx();
   if(!G.cutGone && !osScene) drawPlayer();
+  drawPortals();
   if(G.eatOn && G.state!=='cut') drawEater();
+  if(G.rmode==='light'){                       /* a white sheet: invert the lot */
+    ctx.globalCompositeOperation='difference';
+    ctx.fillStyle='#EAF2F8'; ctx.fillRect(cam-40,-40,VW+80,VH+80);
+    ctx.globalCompositeOperation='source-over';
+  }
   if(G.invT>0){
     ctx.globalCompositeOperation='difference';
     ctx.fillStyle='#C6D8E6'; ctx.fillRect(cam-40,-40,VW+80,VH+80);
@@ -2635,7 +3179,7 @@ function draw(){
 const PALETTE=[['#','solid'],['S','polish'],['I','ice'],['=','thin'],['~','crumb'],
   ['^','spike'],['v','v-spike'],['B','spring'],['G','mirror'],['W','updraft'],
   ['T','phase A'],['t','phase B'],['K','key'],['D','door'],['o','part'],
-  ['C','datum'],['P','spawn'],['X','exit'],['.','erase']];
+  ['C','datum'],['p','portal A'],['q','portal B'],['P','spawn'],['X','exit'],['.','erase']];
 function encodeGrid(g,cols){
   let flat='';
   for(let y=0;y<ROWS;y++) for(let x=0;x<cols;x++) flat+=(g[y][x]||'.');
@@ -2678,7 +3222,7 @@ function loadCustom(g,cols){
   G.lvl=-1; G.mod={}; G.zones=null; G.zoneI=-1;
   G.ab={dj:true,wall:true,inv:true,dash:true};
   COLS=cols; G.grid=g.map(r=>r.slice());
-  G.gems=[]; G.keys=[]; G.movers=[]; G.saws=[]; G.checks=[]; G.spawn=null;
+  G.gems=[]; G.keys=[]; G.movers=[]; G.saws=[]; G.checks=[]; G.portA=[]; G.portB=[]; G.spawn=null;
   G.exit={x:(cols-3)*TS+TS/2, y:(ROWS-4)*TS+TS/2};
   for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
     const ch=G.grid[y][x];
@@ -2688,6 +3232,8 @@ function loadCustom(g,cols){
     else if(ch==='K'){ G.keys.push({x:x*TS+TS/2,y:y*TS+TS/2,got:0}); G.grid[y][x]='.'; }
     else if(ch==='C'){ G.checks.push({x:x*TS+TS/2,y:y*TS+TS/2,on:0,
                         sx:x*TS+(TS-PW)/2, sy:y*TS+(TS-PH)}); G.grid[y][x]='.'; }
+    else if(ch==='p'){ G.portA.push({x:x*TS+TS/2,y:y*TS+TS/2}); G.grid[y][x]='.'; }
+    else if(ch==='q'){ G.portB.push({x:x*TS+TS/2,y:y*TS+TS/2}); G.grid[y][x]='.'; }
   }
   if(!G.spawn) G.spawn={x:TS+5, y:(ROWS-4)*TS+(TS-PH)};
   G.grid0=G.grid.map(r=>r.slice());
@@ -2695,6 +3241,7 @@ function loadCustom(g,cols){
   G.broken.clear(); G.crumbs.clear(); G.doorOpen=false; G.phase=0; G.phaseT=0;
   G.phasePeriod=180; G.fx.length=0; G.trail.length=0;
   G.rmode='normal'; G.allParts=false; G.chaos=0; G.eatOn=false; G.liveDraw=false;
+  G.gscale=1; G.portLock=0;
   G.drawMask=null; G.revealCols=undefined; G.cutDeleted=false; G.cutGone=false;
   G.floorGone=0; G.floorWarn=0; G.split=0; G.invT=0;
   respawn(true); syncHud();
@@ -2826,24 +3373,6 @@ function buildPicker(){
     });
     sec.appendChild(cards); p.appendChild(sec);
   });
-  /* what is being drawn next */
-  const h=document.createElement("div"); h.className="acthead";
-  h.innerHTML="<em>NEXT</em><i></i><span>not drawn yet</span>";
-  p.appendChild(h);
-  const sec=document.createElement("div"); sec.className="world";
-  sec.innerHTML='<div class="wh"><em>COMING SOON</em><i></i><span>in progress</span></div>';
-  const cards=document.createElement("div"); cards.className="cards";
-  [["SPACE","no ceiling, low gravity"],
-   ["CODE","the sheet is its own source"],
-   ["PORTALS","two doors, one sheet"],
-   ["LIGHT","a white sheet, everything inverted"]].forEach(([nm,desc],i)=>{
-    const b=document.createElement("button");
-    b.className="card lock"; b.disabled=true;
-    b.innerHTML='<span class="n">'+String(154+i*8).padStart(3,"0")+'+</span>'+
-      '<span class="t">'+nm+'</span><span class="m"><span>'+desc+'</span></span>';
-    cards.appendChild(b);
-  });
-  sec.appendChild(cards); p.appendChild(sec);
 }
 function buildUnlocked(){ return SAVE.dev || SAVE.unlocked>=LEVELS.length; }
 function openBuild(){

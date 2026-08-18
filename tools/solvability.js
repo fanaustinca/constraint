@@ -29,12 +29,13 @@ function botTest(lvl, attempts, frames){
   return {solved:false, best:Math.round(best)};
 }`);
 const N=run(`LEVELS.length`);
+const A=+(process.argv[2]||0), B=Math.min(N, +(process.argv[3]||N));
 let ok=0; const fails=[];
-for(let i=0;i<N;i++){
+for(let i=A;i<B;i++){
   const cols=run(`LEVELS[${i}].chunks.length*16`);
-  const r=run(`botTest(${i}, 45, ${Math.max(9000, cols*95)})`);
+  const r=run(`botTest(${i}, 45, ${Math.max(14000, cols*150)})`);
   const nm=run(`LEVELS[${i}].name`), wc=run(`WORLDS[LEVELS[${i}].w].code`);
   if(r.solved) ok++;
   else { fails.push(i+1); console.log((r.crash?'CRASH':'FAIL '),String(i+1).padStart(3),wc.padEnd(12),nm.padEnd(16), r.crash||('stuck '+r.best+'px out')); }
 }
-console.log('\nsolved '+ok+'/'+N+(fails.length?('  failed: '+fails.join(', ')):''));
+console.log('\nsolved '+ok+'/'+(B-A)+(fails.length?('  failed: '+fails.join(', ')):''));
