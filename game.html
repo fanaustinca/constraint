@@ -125,6 +125,18 @@ button.tiny{padding:5px 10px; font-size:10px; letter-spacing:.1em}
 .acthead em{font-style:normal; font-weight:700; color:var(--text)}
 .acthead i{flex:0 0 26px; height:1px; background:var(--line-dim)}
 .acthead span{color:var(--text-faint); letter-spacing:.16em}
+.worldbtn{
+  display:flex; align-items:center; gap:10px; width:100%;
+  padding:8px 12px; font-size:10px; letter-spacing:.22em; text-transform:uppercase;
+  border:1px solid var(--gridmaj); background:var(--panel); color:var(--text-dim);
+}
+.worldbtn:hover:not(.lock){border-color:var(--accent); color:var(--accent)}
+.worldbtn.open{border-color:var(--line-dim); color:var(--text)}
+.worldbtn b{font-weight:700; color:var(--accent); width:10px; text-align:center}
+.worldbtn em{font-style:normal; color:inherit; letter-spacing:.22em}
+.worldbtn i{flex:1; height:1px; background:var(--gridmaj)}
+.worldbtn span{color:var(--text-faint); font-variant-numeric:tabular-nums; letter-spacing:.1em}
+.worldbtn.lock{opacity:.3; cursor:not-allowed}
 .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:6px}
 .card{
   background:var(--panel); border:1px solid var(--gridmaj); padding:8px 10px;
@@ -416,13 +428,13 @@ const WORLDS = [
     ab:{dj:true, wall:true, inv:true, dash:true},
     mod:{render:'drawn', livedraw:true} },
   { act:7, code:"ORBIT", name:"Orbit", hint:"Gravity is a suggestion out here.",
-    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.55} },
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.42, accel:0.55} },
   { act:7, code:"VACUUM", name:"Vacuum", hint:"Gravity is a suggestion out here.",
-    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.5, sparse:true} },
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.38, accel:0.5, sparse:true} },
   { act:7, code:"TIDE", name:"Tide", hint:"Gravity is a suggestion out here.",
-    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.6, drift:1.3} },
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.46, accel:0.6, drift:1.3} },
   { act:7, code:"APOGEE", name:"Apogee", hint:"Gravity is a suggestion out here.",
-    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.45, eat:1.0} },
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.35, accel:0.5, eat:1.0} },
   { act:8, code:"THRESHOLD", name:"Threshold", hint:"Two doors, one sheet.",
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{} },
   { act:8, code:"PAIRED", name:"Paired", hint:"Two doors, one sheet.",
@@ -1643,6 +1655,7 @@ function loadLevel(i){
     else if(ch==='p'){ G.portA.push({x:x*TS+TS/2,y:y*TS+TS/2}); G.grid[y][x]='.'; }
     else if(ch==='q'){ G.portB.push({x:x*TS+TS/2,y:y*TS+TS/2}); G.grid[y][x]='.'; }
   }
+  pairPortals();
   G.partsTotal=G.gems.length;
   G.parts=0; G.deaths=0; G.time=0; G.won=0; G.banner=110;
   G.broken.clear(); G.crumbs.clear(); G.doorOpen=false; G.phase=0; G.phaseT=0;
@@ -1662,7 +1675,7 @@ function loadLevel(i){
   G.driftK=MOD.drift||1;
   if(MOD.chaos) for(const m of G.movers) if(m.loose) m.faller=1;
   G.rmode=MOD.render||'normal'; G.allParts=!!MOD.allparts;
-  G.chaos=MOD.chaos||0; G.chaosT=200; G.gscale=MOD.gravity||1; G.portLock=0;
+  G.chaos=MOD.chaos||0; G.chaosT=200; G.gscale=MOD.gravity||1; G.ascale=MOD.accel||1; G.portLock=0;
   G.liveDraw=!!MOD.livedraw; G.zoneI=-1;
   G.split=0; G.splitAmt=0; G.floorWarn=0; G.floorGone=0; G.invT=0;
   G.eatOn=!!MOD.eat; G.eatSpd=MOD.eat||0;
@@ -1673,6 +1686,19 @@ function loadLevel(i){
   respawn(true);
   document.getElementById('hint').textContent=WORLDS[L.w].hint;
   syncHud();
+}
+function pairPortals(){
+  const used=new Array(G.portB.length).fill(false);
+  G.portPairs=[];
+  for(const a of G.portA){
+    let bi=-1, bd=1e9;
+    for(let i=0;i<G.portB.length;i++){
+      if(used[i]) continue;
+      const d=Math.abs(G.portB[i].x-a.x)+Math.abs(G.portB[i].y-a.y)*0.5;
+      if(d<bd){ bd=d; bi=i; }
+    }
+    if(bi>=0){ used[bi]=true; G.portPairs.push([a,G.portB[bi]]); }
+  }
 }
 function camTarget(){
   const max=Math.max(0, COLS*TS-VW);
@@ -1951,7 +1977,7 @@ function step(){
   }else{
     if(P.lock>0) P.lock--;
     else if(dir){
-      const acc=(P.onIce&&P.ground)?ICE_ACC:ACC;
+      const acc=((P.onIce&&P.ground)?ICE_ACC:ACC)*(G.ascale||1);
       P.face=dir;
       if(P.vx*dir > MAXRUN){
         P.vx-=dir*0.14;                       // carrying dash momentum: bleed, never add
@@ -1961,7 +1987,7 @@ function step(){
         if(P.vx*dir > MAXRUN) P.vx=dir*MAXRUN;
       }
     }else{
-      P.vx*=P.ground?(P.onIce?ICE_FRIC:FRIC):AIRFRIC;
+      P.vx*=P.ground?(P.onIce?ICE_FRIC:FRIC):(G.ascale<1?0.985:AIRFRIC);
       if(Math.abs(P.vx)<0.05) P.vx=0;
     }
 
@@ -2025,11 +2051,9 @@ function step(){
   }
 
   /* portals — latched, so landing on the far door does not throw you back */
-  if(G.portA.length){
-    const nn=Math.min(G.portA.length,G.portB.length);
+  if(G.portPairs && G.portPairs.length){
     let touching=false, dest=null;
-    for(let i=0;i<nn;i++){
-      const pa=G.portA[i], pb=G.portB[i];
+    for(const [pa,pb] of G.portPairs){
       if(Math.abs(pa.x-px)<15 && Math.abs(pa.y-py)<17){ touching=true; if(!dest) dest=pb; }
       else if(Math.abs(pb.x-px)<15 && Math.abs(pb.y-py)<17){ touching=true; if(!dest) dest=pa; }
     }
@@ -2857,8 +2881,19 @@ function drawCode(cam){
     const ch=G.grid[cy][cx]; if(ch==='.') continue;
     if(G.drawMask && !G.drawMask.has(cy*COLS+cx)) continue;
     const haz='^v<>'.includes(ch);
-    ctx.fillStyle = haz? C.haz : (ch==='~'? '#4CC9E8' : (ch==='S'? '#8FA8BC' : '#57D98A'));
+    let gone=false, faint=false;
+    if(ch==='~') gone=G.broken.has(cy*COLS+cx);          /* stepped on: it is not there */
+    else if(ch==='T') faint=(G.phase!==0);
+    else if(ch==='t') faint=(G.phase!==1);
+    if(gone) continue;
+    ctx.globalAlpha=faint?0.22:1;
+    ctx.fillStyle = haz? C.haz
+      : (ch==='G'? C.mirror
+      : (ch==='~'? '#4CC9E8'
+      : (ch==='S'? '#8FA8BC'
+      : (ch==='B'? '#4CC9E8' : '#57D98A'))));
     ctx.fillText(haz?'!':gl[(cx*7+cy*13+ch.charCodeAt(0))%gl.length], cx*TS+TS/2, cy*TS+TS/2+5);
+    ctx.globalAlpha=1;
   }
   ctx.textAlign='left';
   ctx.font='600 9px ui-monospace,monospace'; ctx.fillStyle='rgba(87,217,138,.25)';
@@ -2982,7 +3017,7 @@ function drawPlayer(){
     ctx.closePath(); ctx.fill();
   }
   if(G.rmode==='code'){                        /* code: you are the caret */
-    ctx.fillStyle=(Math.floor(G.tick/16)%2)?'#57D98A':'rgba(87,217,138,.35)';
+    ctx.fillStyle=(Math.floor(G.tick/16)%2)?C.accent:'rgba(255,122,47,.35)';
     ctx.fillRect(cx-4, y-1, 8, h+2);
     ctx.fillStyle='#0A0F16'; ctx.fillRect(cx-1,y+3,2,h-6);
     return;
@@ -3047,10 +3082,9 @@ function drawOverlayText(){
   }
 }
 function drawPortals(){
-  if(!G.portA||!G.portA.length) return;
-  const nn=Math.min(G.portA.length,G.portB.length);
-  for(let i=0;i<nn;i++){
-    for(const [pt,col] of [[G.portA[i],C.mirror],[G.portB[i],'#4CC9E8']]){
+  if(!G.portPairs||!G.portPairs.length) return;
+  for(const pr of G.portPairs){
+    for(const [pt,col] of [[pr[0],C.mirror],[pr[1],'#4CC9E8']]){
       ctx.save(); ctx.translate(pt.x,pt.y); ctx.rotate(G.tick/26);
       ctx.strokeStyle=col; ctx.lineWidth=1.6; dash(false);
       for(let k=0;k<3;k++){
@@ -3226,12 +3260,13 @@ function loadCustom(g,cols){
     else if(ch==='q'){ G.portB.push({x:x*TS+TS/2,y:y*TS+TS/2}); G.grid[y][x]='.'; }
   }
   if(!G.spawn) G.spawn={x:TS+5, y:(ROWS-4)*TS+(TS-PH)};
+  pairPortals();
   G.grid0=G.grid.map(r=>r.slice());
   G.partsTotal=G.gems.length; G.parts=0; G.deaths=0; G.time=0; G.won=0; G.banner=110;
   G.broken.clear(); G.crumbs.clear(); G.doorOpen=false; G.phase=0; G.phaseT=0;
   G.phasePeriod=180; G.fx.length=0; G.trail.length=0;
   G.rmode='normal'; G.allParts=false; G.chaos=0; G.eatOn=false; G.liveDraw=false;
-  G.gscale=1; G.portLock=0;
+  G.gscale=1; G.ascale=1; G.portLock=0;
   G.drawMask=null; G.revealCols=undefined; G.cutDeleted=false; G.cutGone=false;
   G.floorGone=0; G.floorWarn=0; G.split=0; G.invT=0;
   respawn(true); syncHud();
@@ -3327,11 +3362,18 @@ function showDone(isBest){
   $('btnNext').textContent=(i+1<LEVELS.length)?'Next sheet':'Sheet list';
   showOv('ovDone');
 }
+const OPEN=new Set();
 function buildPicker(){
   const p=$('picker'); p.innerHTML='';
-  const ACTSTART={1:0,2:40,3:80,4:104,5:128,6:152};
-  const ACTNAME={1:'the basics',2:'revision b',3:'revision c',4:'revision d',5:'recovery',6:'authored'};
-  const ROMAN={1:'I',2:'II',3:'III',4:'IV',5:'V',6:'VI'};
+  const ACTSTART={1:0,2:40,3:80,4:104,5:128,6:152,7:153,8:233,9:313,10:393};
+  const ACTNAME={1:'the basics',2:'revision b',3:'revision c',4:'revision d',5:'recovery',
+    6:'authored',7:'space',8:'portals',9:'code',10:'light'};
+  const ROMAN={1:'I',2:'II',3:'III',4:'IV',5:'V',6:'VI',7:'VII',8:'VIII',9:'IX',10:'X'};
+  /* first time in, open whichever world you are up to */
+  if(!OPEN.size){
+    const nx=Math.min(SAVE.unlocked-1, LEVELS.length-1);
+    if(LEVELS[nx]) OPEN.add(LEVELS[nx].w);
+  }
   let curAct=0;
   WORLDS.forEach((w,wi)=>{
     const act=w.act||1;
@@ -3343,25 +3385,37 @@ function buildPicker(){
       p.appendChild(h);
     }
     const idx=LEVELS.map((l,i)=>[l,i]).filter(a=>a[0].w===wi);
-    const sec=document.createElement('div'); sec.className='world';
+    if(!idx.length) return;
     const done=idx.filter(a=>SAVE.best[a[1]]!==undefined).length;
-    sec.innerHTML='<div class="wh"><em>'+w.code+'</em><i></i><span>'+done+' / '+idx.length+'</span></div>';
-    const cards=document.createElement('div'); cards.className='cards';
-    idx.forEach(([L,i])=>{
-      const lock=i+1>SAVE.unlocked;
-      const b=document.createElement('button');
-      b.className='card'+(lock?' lock':'')+(i===G.lvl?' cur':'');
-      b.disabled=lock;
-      const best=SAVE.best[i], parts=SAVE.parts[i]||0, tot=partsIn(i), skip=SAVE.skipped[i];
-      b.innerHTML='<span class="n">'+String(i+1).padStart(2,'0')+'</span>'+
-        '<span class="t">'+(lock?'Locked':L.name)+'</span>'+
-        '<span class="m">'+(best!==undefined?'<span class="done">'+fmt(best)+'s</span>'
-            :(skip?'<span>skipped</span>':'<span>—</span>'))+
-        '<span class="parts">'+parts+'/'+tot+'</span></span>';
-      if(!lock) b.onclick=()=>play(i);
-      cards.appendChild(b);
-    });
-    sec.appendChild(cards); p.appendChild(sec);
+    const open=OPEN.has(wi);
+    const reachable=idx.some(a=>a[1]+1<=SAVE.unlocked);
+    const sec=document.createElement('div'); sec.className='world';
+    const head=document.createElement('button');
+    head.className='worldbtn'+(open?' open':'')+(reachable?'':' lock');
+    head.disabled=!reachable;
+    head.innerHTML='<b>'+(open?'−':'+')+'</b><em>'+w.code+'</em>'+
+                   '<i></i><span>'+done+' / '+idx.length+'</span>';
+    head.onclick=()=>{ open?OPEN.delete(wi):OPEN.add(wi); buildPicker(); };
+    sec.appendChild(head);
+    if(open){
+      const cards=document.createElement('div'); cards.className='cards';
+      idx.forEach(([L,i])=>{
+        const lock=i+1>SAVE.unlocked;
+        const b=document.createElement('button');
+        b.className='card'+(lock?' lock':'')+(i===G.lvl?' cur':'');
+        b.disabled=lock;
+        const best=SAVE.best[i], parts=SAVE.parts[i]||0, tot=partsIn(i), skip=SAVE.skipped[i];
+        b.innerHTML='<span class="n">'+String(i+1).padStart(3,'0')+'</span>'+
+          '<span class="t">'+(lock?'Locked':L.name)+'</span>'+
+          '<span class="m">'+(best!==undefined?'<span class="done">'+fmt(best)+'s</span>'
+              :(skip?'<span>skipped</span>':'<span>—</span>'))+
+          '<span class="parts">'+parts+'/'+tot+'</span></span>';
+        if(!lock) b.onclick=()=>play(i);
+        cards.appendChild(b);
+      });
+      sec.appendChild(cards);
+    }
+    p.appendChild(sec);
   });
 }
 function buildUnlocked(){ return SAVE.dev || SAVE.unlocked>=LEVELS.length; }
