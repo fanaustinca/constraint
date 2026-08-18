@@ -317,6 +317,7 @@ button.tiny{padding:5px 10px; font-size:10px; letter-spacing:.1em}
             <dt>Violet pads</dt><dd>Mirror pads. Touch one and gravity flips immediately — no button. They come in pairs: one on the floor to send you up, one on the ceiling to set you back down. Ribs hanging from the ceiling keep an inverted run inside the section it belongs to.</dd>
             <dt>Green flags</dt><dd>Datums. Touch one and it becomes your respawn point — sheets are long, so they matter. The strip along the top shows where they are and how far you've come.</dd>
             <dt>Cyan chevrons</dt><dd>Springs. Three tiles wide, and they throw you far higher than any jump — high enough to top walls nothing else reaches.</dd>
+            <dt>Powdered snow</dt><dd>Looks exactly like snow. It holds nothing up — you sink in, you cannot run, and the cold builds. Jump straight back out; the meter thaws twice as fast as it fills.</dd>
             <dt>Pale blocks</dt><dd>Polished faces. Solid, but there is nothing to grab — no wall slide, no wall jump. If one is in your way, a spring or an updraft is the way over it.</dd>
             <dt>Cyan updrafts</dt><dd>Rising air. Walk in and it carries you up; steer out of the top onto whatever the climb was for.</dd>
             <dt>Blue / ghosted</dt><dd>Phase blocks. They trade places on a timer — watch them flicker before they switch.</dd>
@@ -1676,7 +1677,7 @@ const G={
   fx:[], trail:[], msg:'', msgT:0, banner:0, exit:{x:0,y:0}, ab:{}, won:0
 };
 const P={x:0,y:0,vx:0,vy:0,g:1,ground:0,coyote:0,dj:0,inv:0,dash:0,dashT:0,dashDir:[0,0],
-         lock:0,face:1,wall:0,slide:0,sx:1,sy:1,dead:0,rideM:null,onIce:0,onSnow:0,padT:0,invCd:0};
+         lock:0,face:1,wall:0,slide:0,sx:1,sy:1,dead:0,rideM:null,onIce:0,onSnow:0,frost:0,padT:0,invCd:0};
 
 function tileAt(cx,cy){
   if(cy<0) return '#'; if(cy>=ROWS) return '.';
@@ -1805,8 +1806,14 @@ function winterize(){
     const band=Math.floor(cx/11)%3;               // plain, ice, snow — ~11 columns each
     if(band===0) continue;
     const ch=band===1?'I':'n';
+    /* every third snow band hides a pocket of powder two deep */
+    const powder = band===2 && (Math.floor(cx/11)%6===2) && (cx%11)>=3 && (cx%11)<=6;
     for(let cy=1;cy<ROWS;cy++){
-      if(G.grid[cy][cx]==='#' && G.grid[cy-1][cx]==='.'){ G.grid[cy][cx]=ch; break; }
+      if(G.grid[cy][cx]==='#' && G.grid[cy-1][cx]==='.'){
+        G.grid[cy][cx]=powder?'w':ch;
+        if(powder && cy+1<ROWS && G.grid[cy+1][cx]==='#') G.grid[cy+1][cx]='w';
+        break;
+      }
     }
   }
 }
@@ -1928,7 +1935,7 @@ function camTarget(){
 function respawn(hard){
   P.x=G.spawn.x; P.y=G.spawn.y; P.vx=0; P.vy=0; P.g=1; P.ground=0; P.coyote=0;
   P.dj=1; P.inv=1; P.dash=1; P.dashT=0; P.lock=0; P.face=1; P.wall=0; P.slide=0;
-  P.sx=1; P.sy=1; P.dead=0; P.rideM=null; P.onIce=0; P.onSnow=0; P.padT=0; P.invCd=0;
+  P.sx=1; P.sy=1; P.dead=0; P.rideM=null; P.onIce=0; P.onSnow=0; P.frost=0; P.padT=0; P.invCd=0;
   G.cam=camTarget();
   if(G.eatOn) eaterReset();
   if(hard){ G.broken.clear(); G.crumbs.clear(); }
@@ -1938,9 +1945,9 @@ function restart(){ if(G.state!=='play') return; G.deaths++; G.time=0; loadKeep(
 function loadKeep(){ const d=G.deaths; loadLevel(G.lvl); G.deaths=d; syncHud(); }
 
 /* ------------------------------ death ------------------------------- */
-function die(){
+function die(cause){
   if(P.dead) return;
-  P.dead=1; G.deaths++; G.freeze=7; G.shake=9; SFX.die(); flash('OVER-DEFINED');
+  P.dead=1; G.deaths++; G.freeze=7; G.shake=9; SFX.die(); flash(cause||'OVER-DEFINED');
   for(let i=0;i<26;i++){
     const a=Math.random()*Math.PI*2, s=1+Math.random()*4.2;
     G.fx.push({x:P.x+PW/2,y:P.y+PH/2,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:34+Math.random()*16,c:'#FF7A2F',sz:2+Math.random()*2});
@@ -2243,6 +2250,19 @@ function step(){
     if(P.vy>mf) P.vy=mf; if(P.vy<-mf) P.vy=-mf;
   }
 
+  /* powdered snow — indistinguishable until you are in it */
+  const FROSTMAX=170;
+  if(touchingTile('w')){
+    P.frost=Math.min(FROSTMAX, P.frost+1);
+    if(P.vy>1.15*P.g) P.vy=1.15*P.g;            /* you sink, you do not fall */
+    P.vx*=0.88;                                  /* and you cannot run in it */
+    P.dj=1;                                      /* but you can always kick back out */
+    if(G.tick%4===0)
+      G.fx.push({x:P.x+PW/2+(Math.random()-.5)*PW, y:P.y+PH*Math.random(),
+                 vx:(Math.random()-.5)*0.8, vy:-0.5-Math.random(), life:20, sz:1.4, c:'#E4EEF6'});
+    if(P.frost>=FROSTMAX){ die('FROZEN'); return; }
+  } else if(P.frost>0) P.frost=Math.max(0,P.frost-2);   /* thaws twice as fast as it bites */
+
   /* updraft */
   const cxm=Math.floor((P.x+PW/2)/TS), cym=Math.floor((P.y+PH/2)/TS);
   if(tileAt(cxm,cym)==='W'){ P.vy-=0.95; if(P.vy<-6) P.vy=-6; P.dj=1;
@@ -2388,6 +2408,22 @@ function stepWeather(){
     if(fl.y>VH+3){ fl.y=-3; fl.x=Math.random()*VW; }
     if(fl.x<-3) fl.x=VW+3; else if(fl.x>VW+3) fl.x=-3;
   }
+}
+function drawFrost(){
+  if(!P.frost) return;
+  const u=P.frost/170;
+  ctx.strokeStyle='rgba(200,230,246,'+(0.10+u*0.5).toFixed(3)+')';
+  for(let i=0;i<5;i++){
+    const w=6+i*7+u*26;
+    ctx.lineWidth=1;
+    ctx.strokeRect(w, w*0.55, VW-w*2, VH-w*1.1);
+  }
+  const bw=90, bx=VW/2-bw/2, by=VH-26;
+  ctx.fillStyle='rgba(10,15,22,.7)'; ctx.fillRect(bx-1,by-1,bw+2,7);
+  ctx.fillStyle=u>0.7?C.haz:'#BFE2F5'; ctx.fillRect(bx,by,bw*u,5);
+  ctx.font='600 8px ui-monospace,monospace'; ctx.textAlign='center';
+  ctx.fillStyle=u>0.7?C.haz:'#BFE2F5';
+  ctx.fillText(u>0.7?'FREEZING':'SINKING', VW/2, by-4); ctx.textAlign='left';
 }
 function drawWeather(){
   if(G.weather!=='snow'||!G.snowfall) return;
@@ -3000,9 +3036,9 @@ function drawTiles(cam){
       ctx.moveTo(x+5.5,y); ctx.lineTo(x+5.5,y+TS);
       ctx.moveTo(x+15.5,y); ctx.lineTo(x+15.5,y+TS); ctx.stroke();
     }
-    else if(ch==='n'){
+    else if(ch==='n'||ch==='w'){
       ctx.fillStyle='#26333F'; ctx.fillRect(x,y,TS,TS);
-      const N=(a,b)=>tileAt(a,b)==='n';
+      const N=(a,b)=>{ const c=tileAt(a,b); return c==='n'||c==='w'; };
       const crest=(wx)=>y+6+Math.sin(wx/29)*2.4+Math.sin(wx/13)*1.1;
       if(!N(cx,cy-1)){
         ctx.fillStyle='#E4EEF6';
@@ -3079,7 +3115,7 @@ function drawFlatLines(cam){
       ctx.beginPath(); ctx.moveTo(x+TS/2,y); ctx.lineTo(x+TS/2,y+TS); ctx.stroke(); dash(false); continue; }
     let col=LC, dsh=false;
     if(ch==='I') col=C.cyan;
-    else if(ch==='n') col='#DCE9F2';
+    else if(ch==='n'||ch==='w') col='#DCE9F2';
     else if(ch==='S') col='rgba(198,216,230,.60)';
     else if(ch==='B') col=C.cyan;
     else if(ch==='G') col=C.mirror;
@@ -3162,7 +3198,7 @@ function drawCode(cam){
     ctx.fillStyle = haz? C.haz
       : (ch==='G'? C.mirror
       : (ch==='~'? '#4CC9E8'
-      : (ch==='n'? '#DCE9F2'
+      : ((ch==='n'||ch==='w')? '#DCE9F2'
       : (ch==='S'? '#8FA8BC'
       : (ch==='B'? '#4CC9E8' : '#57D98A')))));
     ctx.fillText(haz?'!':gl[(cx*7+cy*13+ch.charCodeAt(0))%gl.length], cx*TS+TS/2, cy*TS+TS/2+5);
@@ -3295,7 +3331,8 @@ function drawPlayer(){
     ctx.fillStyle='#0A0F16'; ctx.fillRect(cx-1,y+3,2,h-6);
     return;
   }
-  ctx.fillStyle=C.accent; rr(x,y,w,h,3); ctx.fill();
+  ctx.fillStyle=P.frost? 'rgb('+Math.round(255-135*(P.frost/170))+','+Math.round(122+96*(P.frost/170))+','+Math.round(47+188*(P.frost/170))+')' : C.accent;
+  rr(x,y,w,h,3); ctx.fill();
   ctx.fillStyle='rgba(10,15,22,.55)'; rr(x+2.5,y+2.5,w-5,h-5,2); ctx.fill();
   ctx.strokeStyle='#FFD9C0'; ctx.lineWidth=1;
   ctx.beginPath();
@@ -3466,6 +3503,7 @@ function draw(){
   ctx.restore();
   if(G.state==='cut'){ drawCut(); return; }
   drawWeather();
+  drawFrost();
   drawProgress();
   drawOverlayText();
 }
@@ -3477,7 +3515,7 @@ function draw(){
 const PALETTE=[['#','solid'],['S','polish'],['I','ice'],['=','thin'],['~','crumb'],
   ['^','spike'],['v','v-spike'],['B','spring'],['G','mirror'],['W','updraft'],
   ['T','phase A'],['t','phase B'],['K','key'],['D','door'],['o','part'],
-  ['n','snow'],['C','datum'],['p','portal A'],['q','portal B'],['P','spawn'],['X','exit'],['.','erase']];
+  ['n','snow'],['w','powder'],['C','datum'],['p','portal A'],['q','portal B'],['P','spawn'],['X','exit'],['.','erase']];
 function encodeGrid(g,cols){
   let flat='';
   for(let y=0;y<ROWS;y++) for(let x=0;x<cols;x++) flat+=(g[y][x]||'.');
