@@ -465,13 +465,13 @@ const WORLDS = [
   { act:10, code:"WHITEOUT", name:"Whiteout", hint:"A white sheet. Everything reads inverted.",
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'light', sparse:true} },
   { act:11, code:"FROST", name:"Frost", hint:"Ice runs fast. Snow drags. Watch the ground.",
-    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow'} },
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow', winter:true} },
   { act:11, code:"THAW", name:"Thaw", hint:"Ice runs fast. Snow drags. Watch the ground.",
-    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow', phase:120} },
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow', winter:true, phase:120} },
   { act:11, code:"BLIZZARD", name:"Blizzard", hint:"Ice runs fast. Snow drags. Watch the ground.",
-    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow', drift:1.3, sparse:true} },
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow', winter:true, drift:1.3, sparse:true} },
   { act:11, code:"DEEPFREEZE", name:"Deepfreeze", hint:"Ice runs fast. Snow drags. Watch the ground.",
-    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow', eat:1.0} }
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow', winter:true, eat:1.0} }
 ];
 
 /* ---------------------------------------------------------------------
@@ -1726,6 +1726,17 @@ function drawEater(){
   }
   drawCursor(E.cx, E.cy, E.st==='menu');
 }
+function winterize(){
+  /* the top surface of the sheet becomes long alternating bands */
+  for(let cx=0;cx<COLS;cx++){
+    const band=Math.floor(cx/11)%3;               // plain, ice, snow — ~11 columns each
+    if(band===0) continue;
+    const ch=band===1?'I':'n';
+    for(let cy=1;cy<ROWS;cy++){
+      if(G.grid[cy][cx]==='#' && G.grid[cy-1][cx]==='.'){ G.grid[cy][cx]=ch; break; }
+    }
+  }
+}
 function applyDrift(k){
   /* under-defined: any platform with air above and below comes loose and bobs */
   const runs=[];
@@ -1806,6 +1817,7 @@ function loadLevel(i){
   }
   G.penT=1; G.penX=0; G.penY=VH*0.4; G.penTX=0; G.penTY=VH*0.4;
   G.phasePeriod=MOD.phase||180;
+  if(MOD.winter) winterize();
   if(MOD.drift) applyDrift(MOD.drift);
   else if(MOD.chaos) applyDrift(0.9);
   G.driftK=MOD.drift||1;
@@ -2913,16 +2925,23 @@ function drawTiles(cam){
     else if(ch==='n'){
       ctx.fillStyle='#26333F'; ctx.fillRect(x,y,TS,TS);
       const N=(a,b)=>tileAt(a,b)==='n';
+      const crest=(wx)=>y+6+Math.sin(wx/29)*2.4+Math.sin(wx/13)*1.1;
       if(!N(cx,cy-1)){
-        ctx.fillStyle='#DCE9F2';
+        ctx.fillStyle='#E4EEF6';
         ctx.beginPath();
-        ctx.moveTo(x,y+7);
-        for(let i=0;i<=TS;i+=6) ctx.lineTo(x+i, y+4+Math.sin((cx*13+i)/5)*2.2);
-        ctx.lineTo(x+TS,y+TS); ctx.lineTo(x,y+TS); ctx.closePath(); ctx.fill();
-      } else { ctx.fillStyle='rgba(220,233,242,.55)'; ctx.fillRect(x,y,TS,TS); }
-      ctx.strokeStyle='rgba(255,255,255,.30)'; ctx.lineWidth=1; dash(false);
-      if(!N(cx-1,cy)){ ctx.beginPath(); ctx.moveTo(x+.5,y); ctx.lineTo(x+.5,y+TS); ctx.stroke(); }
-      if(!N(cx+1,cy)){ ctx.beginPath(); ctx.moveTo(x+TS-.5,y); ctx.lineTo(x+TS-.5,y+TS); ctx.stroke(); }
+        ctx.moveTo(x, crest(cx*TS));
+        for(let i=2;i<=TS;i+=2) ctx.lineTo(x+i, crest(cx*TS+i));
+        ctx.lineTo(x+TS, y+TS); ctx.lineTo(x, y+TS);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=1; dash(false);
+        ctx.beginPath();
+        ctx.moveTo(x, crest(cx*TS));
+        for(let i=2;i<=TS;i+=2) ctx.lineTo(x+i, crest(cx*TS+i));
+        ctx.stroke();
+      } else { ctx.fillStyle='rgba(228,238,246,.62)'; ctx.fillRect(x,y,TS,TS); }
+      ctx.strokeStyle='rgba(210,228,240,.22)'; ctx.lineWidth=1; dash(false);
+      if(!N(cx-1,cy)){ ctx.beginPath(); ctx.moveTo(x+.5,y+8); ctx.lineTo(x+.5,y+TS); ctx.stroke(); }
+      if(!N(cx+1,cy)){ ctx.beginPath(); ctx.moveTo(x+TS-.5,y+8); ctx.lineTo(x+TS-.5,y+TS); ctx.stroke(); }
     }
     else if(ch==='G'){
       ctx.fillStyle='rgba(167,139,250,.13)'; ctx.fillRect(x,y,TS,TS);
