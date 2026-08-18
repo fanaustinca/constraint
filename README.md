@@ -32,6 +32,16 @@ Then five **extra worlds**, 80 sheets each, sitting outside the story:
 | CODE | 314–393 | the sheet renders as source glyphs; you are a blinking caret |
 | LIGHT | 394–473 | the whole sheet composited to inverse — white ground, dark geometry |
 | WINTER | 474–553 | ice runs fast (4.9), snow drags (2.15), and it is snowing |
+| TRIALS | 554–600 | a 47-rung difficulty ladder used by the ranking test |
+
+## The test
+
+**Take the test** on the menu drops you into trial 24 of 47 and binary searches on how
+you actually play. Each sheet is scored against a par time derived from its length and
+your death count; do well and it jumps up the ladder, struggle and it drops. Six sheets
+places you, and you get a rank from **Beginner** to **Grandmaster**. Giving up on a sheet
+counts as a failure and moves you down. Trials are always unlocked and never advance
+story progression.
 
 ## Layout
 
