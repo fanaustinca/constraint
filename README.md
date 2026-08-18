@@ -23,6 +23,16 @@ draw back.
 | V · recovery | 129–152 | corruption, every file mandatory, no checkpoints |
 | VI · authored | 153 | one sheet, 24 screens, every block in the library |
 
+Then five **extra worlds**, 80 sheets each, sitting outside the story:
+
+| Extra world | Sheets | What it adds |
+|---|---|---|
+| SPACE | 154–233 | real low gravity — jumps 2.4x higher and 10.9 tiles long |
+| PORTALS | 234–313 | a linked tile pair that teleports you |
+| CODE | 314–393 | the sheet renders as source glyphs; you are a blinking caret |
+| LIGHT | 394–473 | the whole sheet composited to inverse — white ground, dark geometry |
+| WINTER | 474–553 | ice runs fast (4.9), snow drags (2.15), and it is snowing |
+
 ## Layout
 
 `game.html` is the source of truth — it has no `<!doctype>` or `<head>` because the Claude

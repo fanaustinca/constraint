@@ -125,6 +125,11 @@ button.tiny{padding:5px 10px; font-size:10px; letter-spacing:.1em}
 .acthead em{font-style:normal; font-weight:700; color:var(--text)}
 .acthead i{flex:0 0 26px; height:1px; background:var(--line-dim)}
 .acthead span{color:var(--text-faint); letter-spacing:.16em}
+.acthead.extra{margin-top:14px; color:var(--accent)}
+.acthead.extra em{color:var(--accent)}
+.acthead.extra i{background:var(--accent-soft)}
+.acthead.theme{margin-top:8px}
+.acthead.theme em{color:var(--text); letter-spacing:.24em}
 .worldbtn{
   display:flex; align-items:center; gap:10px; width:100%;
   padding:8px 12px; font-size:10px; letter-spacing:.22em; text-transform:uppercase;
@@ -458,7 +463,15 @@ const WORLDS = [
   { act:10, code:"NOON", name:"Noon", hint:"A white sheet. Everything reads inverted.",
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'light', phase:110} },
   { act:10, code:"WHITEOUT", name:"Whiteout", hint:"A white sheet. Everything reads inverted.",
-    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'light', sparse:true} }
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'light', sparse:true} },
+  { act:11, code:"FROST", name:"Frost", hint:"Ice runs fast. Snow drags. Watch the ground.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow'} },
+  { act:11, code:"THAW", name:"Thaw", hint:"Ice runs fast. Snow drags. Watch the ground.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow', phase:120} },
+  { act:11, code:"BLIZZARD", name:"Blizzard", hint:"Ice runs fast. Snow drags. Watch the ground.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow', drift:1.3, sparse:true} },
+  { act:11, code:"DEEPFREEZE", name:"Deepfreeze", hint:"Ice runs fast. Snow drags. Watch the ground.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow', eat:1.0} }
 ];
 
 /* ---------------------------------------------------------------------
@@ -468,6 +481,49 @@ const WORLDS = [
    --------------------------------------------------------------------- */
 const CW = 16;
 const CHUNKS = {
+
+/* --- winter: ice runs fast, snow drags ---------------------------- */
+icelong:{t:["################","................","................","................",
+            "................","................","................","................",
+            "................","................",".......o........","................",
+            "................","................","................","IIIIIIII..IIIIII",
+            "IIIIIIII..IIIIII","IIIIIIII..IIIIII"]},
+
+icegap:{t:["################","................","................","................",
+           "................","................","................","................",
+           "................","................","................",".......o........",
+           "................","................","................","IIIII......IIIII",
+           "IIIII......IIIII","IIIII......IIIII"]},
+
+snowlong:{t:["################","................","................","................",
+             "................","................","................","................",
+             "................","................",".......o........","................",
+             "................","................","...^....^....^..","nnnnnnnnnnnnnnnn",
+             "nnnnnnnnnnnnnnnn","nnnnnnnnnnnnnnnn"]},
+
+snowdrift:{t:["################","................","................","................",
+              "................","................","................","................",
+              "................","................","......o.........","................",
+              "................","....nnnn........","..nnnnnnnn......","nnnnnnnnnnnnnnnn",
+              "nnnnnnnnnnnnnnnn","nnnnnnnnnnnnnnnn"]},
+
+icesnow:{t:["################","................","................","................",
+            "................","................","................","................",
+            "................","................","................",".........o......",
+            "................","................","................","IIIIIIIInnnnnnnn",
+            "IIIIIIIInnnnnnnn","IIIIIIIInnnnnnnn"]},
+
+snowpit:{t:["################","................","................","................",
+            "................","................","................","................",
+            "................","................","................",".......o........",
+            "................","................","................","nnnnnn...nnnnnnn",
+            "nnnnnn...nnnnnnn","nnnnnn...nnnnnnn"]},
+
+icehang:{t:["################","................","................","................",
+            "................","................","................","................",
+            "................","......o.........","................","....IIII........",
+            "................","..........vv....","................","IIIIII....IIIIII",
+            "IIIIII....IIIIII","IIIIII....IIIIII"]},
 
 /* --- set pieces -------------------------------------------------- */
 springpit:{t:["################","................","................","................",
@@ -1358,7 +1414,87 @@ const LEVELS = [
 {w:35,name:"Fade",chunks:["st","orbit","span","towerup","leap","ceil","shaft","ex"]},
 {w:35,name:"Dissolve",chunks:["st","lift","sawgap","crumb","mirror","ice","sawspan","ex"]},
 {w:35,name:"Vanish",chunks:["st","ladder","vault","spring","phase","lift2","blade","ex2"]},
-{w:35,name:"White",chunks:["st","lock","lift2","flipwall","thin","wide","springpit","ex2"]}
+{w:35,name:"White",chunks:["st","lock","lift2","flipwall","thin","wide","springpit","ex2"]},
+{w:36,name:"First Frost",chunks:["st","gap","icehang","icegap","mesa","snowpit","ex"]},
+{w:36,name:"Rime",chunks:["st","icelong","float","icesnow","pit","snowdrift","ex"]},
+{w:36,name:"Hoar",chunks:["st","snowlong","dip","icehang","nook","snowdrift","ex"]},
+{w:36,name:"Glaze",chunks:["st","icesnow","climb","thin","snowpit","icelong","stair","ex2"]},
+{w:36,name:"Verglas",chunks:["st","icegap","twin","snowlong","icelong","teethrun","orbit","ex"]},
+{w:36,name:"Black Ice",chunks:["st","bridge","icegap","icesnow","snowpit","lift","ex"]},
+{w:36,name:"Sheet Ice",chunks:["st","snowdrift","icehang","hover","chamf","snowlong","ex"]},
+{w:36,name:"Crust",chunks:["st","zigrise","icegap","roof","icehang","ferry","slide","ex2"]},
+{w:36,name:"Hard Pack",chunks:["st","ministep","snowlong","crumb","icelong","snowdrift","ex"]},
+{w:36,name:"Frozen",chunks:["st","snowpit","sawgap","icesnow","pillar","spike","ex"]},
+{w:36,name:"Brittle",chunks:["st","teeth","updraft","icelong","phase","icesnow","icehang","ex"]},
+{w:36,name:"Clear Ice",chunks:["st","icehang","crumbrun","spring","towerup","ceil","snowdrift","ex"]},
+{w:36,name:"Slick",chunks:["st","pinch","icegap","vault","snowlong","snowpit","lock","ex2"]},
+{w:36,name:"Polish",chunks:["st","crossing","mirror","icelong","icesnow","span","leap","ex2"]},
+{w:36,name:"Skate",chunks:["st","chimney","ladder","snowdrift","dgap","icegap","snowlong","ex2"]},
+{w:36,name:"Glide",chunks:["st","shaft","ice","snowpit","springpit","icegap","needle","ex"]},
+{w:36,name:"Slide",chunks:["st","snowpit","lift2","hopline","flipwall","sawspan","icelong","ex2"]},
+{w:36,name:"Carve",chunks:["st","wide","crumbup","icehang","blade","ceil","icesnow","ex"]},
+{w:36,name:"Edge",chunks:["st","climb","needle","flipwall","snowdrift","snowlong","dgap","ex2"]},
+{w:36,name:"Chill",chunks:["st","snowdrift","snowpit","icegap","zigrise","springpit","orbit","nook","ex"]},
+{w:37,name:"Thaw",chunks:["st","dip","pit","icehang","mesa","icesnow","ex2"]},
+{w:37,name:"Melt",chunks:["st","icelong","pillar","float","stair","gap","snowlong","ex2"]},
+{w:37,name:"Slush",chunks:["st","icegap","thin","roof","ministep","icehang","ex"]},
+{w:37,name:"Runoff",chunks:["st","snowlong","spike","snowdrift","icelong","climb","ex2"]},
+{w:37,name:"Puddle",chunks:["st","hover","icesnow","bridge","pinch","snowpit","icehang","ex"]},
+{w:37,name:"Soft",chunks:["st","crumb","teethrun","icesnow","snowlong","snowdrift","ex2"]},
+{w:37,name:"Wet Snow",chunks:["st","slide","icegap","snowpit","snowdrift","ferry","ex2"]},
+{w:37,name:"Heavy",chunks:["st","lift","icelong","twin","icehang","wide","snowpit","ex2"]},
+{w:37,name:"Sinking",chunks:["st","icesnow","lift2","chamf","icegap","icelong","ex"]},
+{w:37,name:"Slog",chunks:["st","sawgap","chimney","snowlong","icehang","icelong","ex"]},
+{w:37,name:"Wade",chunks:["st","sawspan","snowdrift","lock","icegap","spring","ice","ex"]},
+{w:37,name:"Trudge",chunks:["st","towerup","snowlong","icesnow","mirror","snowpit","hopline","ex2"]},
+{w:37,name:"Drag",chunks:["st","ladder","snowpit","snowlong","crossing","icesnow","updraft","ex"]},
+{w:37,name:"Mire",chunks:["st","icehang","phase","icegap","teeth","leap","span","ex"]},
+{w:37,name:"Sludge",chunks:["st","crumbrun","crumbup","icelong","blade","snowdrift","shaft","ex"]},
+{w:37,name:"Give",chunks:["st","icehang","icesnow","vault","snowdrift","crumbrun","springpit","ex"]},
+{w:37,name:"Sag",chunks:["st","teethrun","snowpit","ministep","ferry","ice","slide","snowlong","ex"]},
+{w:37,name:"Yield",chunks:["st","icelong","chamf","icesnow","mesa","bridge","lift","ex"]},
+{w:37,name:"Soften",chunks:["st","pit","towerup","teeth","icegap","icehang","snowdrift","ex"]},
+{w:37,name:"Break Up",chunks:["st","crumbup","nook","snowlong","icegap","snowdrift","stair","ex"]},
+{w:38,name:"Blizzard",chunks:["st","snowpit","icesnow","icelong","gap","float","ex"]},
+{w:38,name:"Squall",chunks:["st","thin","snowlong","roof","icegap","pillar","ex"]},
+{w:38,name:"Whiteout II",chunks:["st","spike","dip","stair","snowpit","icelong","nook","ex"]},
+{w:38,name:"Gale",chunks:["st","snowdrift","pillar","icehang","float","dip","ex"]},
+{w:38,name:"Drift",chunks:["st","icesnow","icegap","icelong","zigrise","hover","ex"]},
+{w:38,name:"Bank",chunks:["st","orbit","pinch","lift2","snowpit","icehang","crumb","ex"]},
+{w:38,name:"Cornice",chunks:["st","twin","snowpit","snowlong","wide","icegap","ex2"]},
+{w:38,name:"Pile",chunks:["st","needle","pinch","ice","snowdrift","icesnow","icehang","ex2"]},
+{w:38,name:"Bury",chunks:["st","chamf","bridge","snowlong","teethrun","icelong","ex"]},
+{w:38,name:"Smother",chunks:["st","icegap","dgap","icesnow","sawspan","icehang","spring","ex"]},
+{w:38,name:"Howl",chunks:["st","flipwall","snowpit","snowdrift","icegap","ceil","phase","ex"]},
+{w:38,name:"Bite",chunks:["st","snowlong","vault","hopline","shaft","blade","icelong","icehang","ex"]},
+{w:38,name:"Sting",chunks:["st","snowdrift","span","updraft","sawgap","snowlong","ladder","crossing","ex"]},
+{w:38,name:"Lash",chunks:["st","mirror","icesnow","leap","lock","snowpit","chimney","ex"]},
+{w:38,name:"Whip",chunks:["st","icelong","orbit","span","snowpit","mesa","ladder","icehang","ex"]},
+{w:38,name:"Flurry",chunks:["st","icegap","lift2","snowlong","towerup","hover","leap","ex"]},
+{w:38,name:"Swirl",chunks:["st","blade","spring","snowdrift","thin","crumb","icesnow","ex2"]},
+{w:38,name:"Eddy",chunks:["st","lock","icelong","vault","dgap","ferry","snowdrift","ex"]},
+{w:38,name:"Gust",chunks:["st","icesnow","snowdrift","roof","climb","flipwall","sawgap","twin","ex"]},
+{w:38,name:"Storm",chunks:["st","hopline","ceil","needle","icelong","snowpit","icegap","ex"]},
+{w:39,name:"Deep Freeze",chunks:["st","icehang","spike","snowlong","pit","icesnow","ex"]},
+{w:39,name:"Permafrost",chunks:["st","mesa","icegap","snowpit","icesnow","ministep","ex"]},
+{w:39,name:"Glacier",chunks:["st","stair","thin","icelong","snowlong","gap","snowpit","ex"]},
+{w:39,name:"Crevasse",chunks:["st","roof","spike","pit","icelong","ministep","snowdrift","ex"]},
+{w:39,name:"Serac",chunks:["st","ferry","crumbup","snowlong","slide","icehang","snowpit","ex"]},
+{w:39,name:"Moraine",chunks:["st","pillar","icegap","icehang","zigrise","snowdrift","lift","ex"]},
+{w:39,name:"Icefall",chunks:["st","float","icehang","snowlong","orbit","icelong","wide","ex"]},
+{w:39,name:"Cirque",chunks:["st","snowlong","chamf","hover","towerup","icesnow","wide","ex"]},
+{w:39,name:"Arete",chunks:["st","lift2","climb","icegap","icesnow","pinch","icelong","ex"]},
+{w:39,name:"Snowfield",chunks:["st","snowpit","crumbrun","phase","updraft","snowdrift","ex"]},
+{w:39,name:"Névé",chunks:["st","nook","icehang","crossing","sawspan","icegap","snowdrift","chimney","ex"]},
+{w:39,name:"Firn",chunks:["st","snowpit","icelong","shaft","teeth","mirror","springpit","gap","ex2"]},
+{w:39,name:"Blue Ice",chunks:["st","ceil","crumb","icehang","snowlong","teeth","icesnow","ex"]},
+{w:39,name:"Core",chunks:["st","springpit","icesnow","icegap","bridge","slide","hopline","snowdrift","ex2"]},
+{w:39,name:"Bore",chunks:["st","leap","updraft","icegap","snowlong","sawgap","icehang","ex"]},
+{w:39,name:"Shear",chunks:["st","vault","crumbup","snowpit","icesnow","dgap","ladder","ex"]},
+{w:39,name:"Calve",chunks:["st","span","icelong","mirror","snowlong","spring","sawspan","twin","ex"]},
+{w:39,name:"Floe",chunks:["st","icehang","ice","blade","flipwall","icelong","icegap","ex"]},
+{w:39,name:"Pack",chunks:["st","phase","needle","crossing","snowdrift","dip","teethrun","icehang","ex"]},
+{w:39,name:"Absolute Zero",chunks:["st","spring","zigrise","snowpit","shaft","snowlong","lock","lift","ex2"]}
 ];
 
 /* ------------------------------ tuning ------------------------------ */
@@ -1467,7 +1603,7 @@ const G={
   fx:[], trail:[], msg:'', msgT:0, banner:0, exit:{x:0,y:0}, ab:{}, won:0
 };
 const P={x:0,y:0,vx:0,vy:0,g:1,ground:0,coyote:0,dj:0,inv:0,dash:0,dashT:0,dashDir:[0,0],
-         lock:0,face:1,wall:0,slide:0,sx:1,sy:1,dead:0,rideM:null,onIce:0,padT:0,invCd:0};
+         lock:0,face:1,wall:0,slide:0,sx:1,sy:1,dead:0,rideM:null,onIce:0,onSnow:0,padT:0,invCd:0};
 
 function tileAt(cx,cy){
   if(cy<0) return '#'; if(cy>=ROWS) return '.';
@@ -1477,7 +1613,7 @@ function tileAt(cx,cy){
 function isSolid(cx,cy){
   const ch=tileAt(cx,cy);
   if(G.floorGone>0 && cy>=ROWS-3 && ch==='#') return false;
-  if(ch==='#'||ch==='I'||ch==='B'||ch==='S') return true;
+  if(ch==='#'||ch==='I'||ch==='B'||ch==='S'||ch==='n') return true;
   if(ch==='~') return !G.broken.has(cy*COLS+cx);
   if(ch==='T') return G.phase===0;
   if(ch==='t') return G.phase===1;
@@ -1675,7 +1811,7 @@ function loadLevel(i){
   G.driftK=MOD.drift||1;
   if(MOD.chaos) for(const m of G.movers) if(m.loose) m.faller=1;
   G.rmode=MOD.render||'normal'; G.allParts=!!MOD.allparts;
-  G.chaos=MOD.chaos||0; G.chaosT=200; G.gscale=MOD.gravity||1; G.ascale=MOD.accel||1; G.portLock=0;
+  G.chaos=MOD.chaos||0; G.chaosT=200; G.gscale=MOD.gravity||1; G.ascale=MOD.accel||1; G.portLock=0; G.weather=MOD.weather||null; G.snowfall=null;
   G.liveDraw=!!MOD.livedraw; G.zoneI=-1;
   G.split=0; G.splitAmt=0; G.floorWarn=0; G.floorGone=0; G.invT=0;
   G.eatOn=!!MOD.eat; G.eatSpd=MOD.eat||0;
@@ -1707,7 +1843,7 @@ function camTarget(){
 function respawn(hard){
   P.x=G.spawn.x; P.y=G.spawn.y; P.vx=0; P.vy=0; P.g=1; P.ground=0; P.coyote=0;
   P.dj=1; P.inv=1; P.dash=1; P.dashT=0; P.lock=0; P.face=1; P.wall=0; P.slide=0;
-  P.sx=1; P.sy=1; P.dead=0; P.rideM=null; P.onIce=0; P.padT=0; P.invCd=0;
+  P.sx=1; P.sy=1; P.dead=0; P.rideM=null; P.onIce=0; P.onSnow=0; P.padT=0; P.invCd=0;
   G.cam=camTarget();
   if(G.eatOn) eaterReset();
   if(hard){ G.broken.clear(); G.crumbs.clear(); }
@@ -1786,10 +1922,10 @@ function moveYStep(dy){
       P.ground=1; P.coyote=COYOTE; P.dj=1; P.inv=1; P.dash=1; P.rideM=rideHit;
       if(hitTile){
         const ch=tileAt(hitTile.cx,hitTile.cy);
-        P.onIce = (ch==='I');
+        P.onIce = (ch==='I'); P.onSnow = (ch==='n');
         if(ch==='B'){ P.vy=-SPRING*P.g; P.ground=0; P.sx=0.6; P.sy=1.5; SFX.spring(); G.shake=4; return; }
         if(ch==='~'){ const k=hitTile.cy*COLS+hitTile.cx; if(!G.crumbs.has(k)) G.crumbs.set(k,26); }
-      } else P.onIce=0;
+      } else { P.onIce=0; P.onSnow=0; }
     }
     P.vy=0;
   }
@@ -1882,7 +2018,7 @@ function step(){
   if(G.msgT>0) G.msgT--;
   if(G.banner>0) G.banner--;
   if(G.shake>0) G.shake*=0.86;
-  updateFx();
+  updateFx(); stepWeather();
   if(G.state==='cut'){ stepCut(); return; }
   if(G.freeze>0){ G.freeze--; return; }
   if(G.state!=='play') return;
@@ -1977,17 +2113,21 @@ function step(){
   }else{
     if(P.lock>0) P.lock--;
     else if(dir){
-      const acc=((P.onIce&&P.ground)?ICE_ACC:ACC)*(G.ascale||1);
+      const gr=P.ground||P.coyote>0;            /* ground flickers between frames */
+      const onI=P.onIce&&gr, onN=P.onSnow&&gr;
+      const acc=(onI?ICE_ACC:(onN?0.46:ACC))*(G.ascale||1);
+      const top=onI?4.9:(onN?2.15:MAXRUN);      // ice runs fast, snow drags
       P.face=dir;
-      if(P.vx*dir > MAXRUN){
-        P.vx-=dir*0.14;                       // carrying dash momentum: bleed, never add
-        if(P.vx*dir < MAXRUN) P.vx=dir*MAXRUN;
+      if(P.vx*dir > top){
+        P.vx-=dir*(onI?0.05:0.22);              // carrying momentum: bleed, never add
+        if(P.vx*dir < top) P.vx=dir*top;
       }else{
         P.vx+=dir*acc;
-        if(P.vx*dir > MAXRUN) P.vx=dir*MAXRUN;
+        if(P.vx*dir > top) P.vx=dir*top;
       }
     }else{
-      P.vx*=P.ground?(P.onIce?ICE_FRIC:FRIC):(G.ascale<1?0.985:AIRFRIC);
+      const gr2=P.ground||P.coyote>0;
+      P.vx*=gr2?(P.onIce?ICE_FRIC:(P.onSnow?0.60:FRIC)):(G.ascale<1?0.985:AIRFRIC);
       if(Math.abs(P.vx)<0.05) P.vx=0;
     }
 
@@ -2151,6 +2291,26 @@ function step(){
   IN.dashP=0; IN.invP=0;
 }
 
+function stepWeather(){
+  if(G.weather!=='snow') return;
+  if(!G.snowfall){
+    G.snowfall=[];
+    for(let i=0;i<110;i++) G.snowfall.push({x:Math.random()*VW, y:Math.random()*VH,
+      v:0.35+Math.random()*1.1, d:(Math.random()-0.5)*0.5, r:0.8+Math.random()*1.5, s:Math.random()*6.28});
+  }
+  for(const fl of G.snowfall){
+    fl.y+=fl.v; fl.x+=fl.d+Math.sin((G.tick+fl.s*40)/48)*0.3;
+    if(fl.y>VH+3){ fl.y=-3; fl.x=Math.random()*VW; }
+    if(fl.x<-3) fl.x=VW+3; else if(fl.x>VW+3) fl.x=-3;
+  }
+}
+function drawWeather(){
+  if(G.weather!=='snow'||!G.snowfall) return;
+  for(const fl of G.snowfall){
+    ctx.fillStyle='rgba(233,244,252,'+(0.28+fl.r*0.22).toFixed(2)+')';
+    ctx.fillRect(fl.x, fl.y, fl.r, fl.r);
+  }
+}
 function updateFx(){
   for(let i=G.fx.length-1;i>=0;i--){
     const f=G.fx[i]; f.x+=f.vx; f.y+=f.vy; f.vy+=0.11; f.vx*=0.97; f.life--;
@@ -2750,6 +2910,20 @@ function drawTiles(cam){
       ctx.moveTo(x+5.5,y); ctx.lineTo(x+5.5,y+TS);
       ctx.moveTo(x+15.5,y); ctx.lineTo(x+15.5,y+TS); ctx.stroke();
     }
+    else if(ch==='n'){
+      ctx.fillStyle='#26333F'; ctx.fillRect(x,y,TS,TS);
+      const N=(a,b)=>tileAt(a,b)==='n';
+      if(!N(cx,cy-1)){
+        ctx.fillStyle='#DCE9F2';
+        ctx.beginPath();
+        ctx.moveTo(x,y+7);
+        for(let i=0;i<=TS;i+=6) ctx.lineTo(x+i, y+4+Math.sin((cx*13+i)/5)*2.2);
+        ctx.lineTo(x+TS,y+TS); ctx.lineTo(x,y+TS); ctx.closePath(); ctx.fill();
+      } else { ctx.fillStyle='rgba(220,233,242,.55)'; ctx.fillRect(x,y,TS,TS); }
+      ctx.strokeStyle='rgba(255,255,255,.30)'; ctx.lineWidth=1; dash(false);
+      if(!N(cx-1,cy)){ ctx.beginPath(); ctx.moveTo(x+.5,y); ctx.lineTo(x+.5,y+TS); ctx.stroke(); }
+      if(!N(cx+1,cy)){ ctx.beginPath(); ctx.moveTo(x+TS-.5,y); ctx.lineTo(x+TS-.5,y+TS); ctx.stroke(); }
+    }
     else if(ch==='G'){
       ctx.fillStyle='rgba(167,139,250,.13)'; ctx.fillRect(x,y,TS,TS);
       ctx.strokeStyle=C.mirror; ctx.lineWidth=1.2; dash(false);
@@ -2808,6 +2982,7 @@ function drawFlatLines(cam){
       ctx.beginPath(); ctx.moveTo(x+TS/2,y); ctx.lineTo(x+TS/2,y+TS); ctx.stroke(); dash(false); continue; }
     let col=LC, dsh=false;
     if(ch==='I') col=C.cyan;
+    else if(ch==='n') col='#DCE9F2';
     else if(ch==='S') col='rgba(198,216,230,.60)';
     else if(ch==='B') col=C.cyan;
     else if(ch==='G') col=C.mirror;
@@ -2890,8 +3065,9 @@ function drawCode(cam){
     ctx.fillStyle = haz? C.haz
       : (ch==='G'? C.mirror
       : (ch==='~'? '#4CC9E8'
+      : (ch==='n'? '#DCE9F2'
       : (ch==='S'? '#8FA8BC'
-      : (ch==='B'? '#4CC9E8' : '#57D98A'))));
+      : (ch==='B'? '#4CC9E8' : '#57D98A')))));
     ctx.fillText(haz?'!':gl[(cx*7+cy*13+ch.charCodeAt(0))%gl.length], cx*TS+TS/2, cy*TS+TS/2+5);
     ctx.globalAlpha=1;
   }
@@ -3192,6 +3368,7 @@ function draw(){
   }
   ctx.restore();
   if(G.state==='cut'){ drawCut(); return; }
+  drawWeather();
   drawProgress();
   drawOverlayText();
 }
@@ -3203,7 +3380,7 @@ function draw(){
 const PALETTE=[['#','solid'],['S','polish'],['I','ice'],['=','thin'],['~','crumb'],
   ['^','spike'],['v','v-spike'],['B','spring'],['G','mirror'],['W','updraft'],
   ['T','phase A'],['t','phase B'],['K','key'],['D','door'],['o','part'],
-  ['C','datum'],['p','portal A'],['q','portal B'],['P','spawn'],['X','exit'],['.','erase']];
+  ['n','snow'],['C','datum'],['p','portal A'],['q','portal B'],['P','spawn'],['X','exit'],['.','erase']];
 function encodeGrid(g,cols){
   let flat='';
   for(let y=0;y<ROWS;y++) for(let x=0;x<cols;x++) flat+=(g[y][x]||'.');
@@ -3265,7 +3442,7 @@ function loadCustom(g,cols){
   G.partsTotal=G.gems.length; G.parts=0; G.deaths=0; G.time=0; G.won=0; G.banner=110;
   G.broken.clear(); G.crumbs.clear(); G.doorOpen=false; G.phase=0; G.phaseT=0;
   G.phasePeriod=180; G.fx.length=0; G.trail.length=0;
-  G.rmode='normal'; G.allParts=false; G.chaos=0; G.eatOn=false; G.liveDraw=false;
+  G.rmode='normal'; G.allParts=false; G.chaos=0; G.eatOn=false; G.liveDraw=false; G.weather=null;
   G.gscale=1; G.ascale=1; G.portLock=0;
   G.drawMask=null; G.revealCols=undefined; G.cutDeleted=false; G.cutGone=false;
   G.floorGone=0; G.floorWarn=0; G.split=0; G.invT=0;
@@ -3365,23 +3542,30 @@ function showDone(isBest){
 const OPEN=new Set();
 function buildPicker(){
   const p=$('picker'); p.innerHTML='';
-  const ACTSTART={1:0,2:40,3:80,4:104,5:128,6:152,7:153,8:233,9:313,10:393};
-  const ACTNAME={1:'the basics',2:'revision b',3:'revision c',4:'revision d',5:'recovery',
-    6:'authored',7:'space',8:'portals',9:'code',10:'light'};
-  const ROMAN={1:'I',2:'II',3:'III',4:'IV',5:'V',6:'VI',7:'VII',8:'VIII',9:'IX',10:'X'};
-  /* first time in, open whichever world you are up to */
-  if(!OPEN.size){
-    const nx=Math.min(SAVE.unlocked-1, LEVELS.length-1);
-    if(LEVELS[nx]) OPEN.add(LEVELS[nx].w);
-  }
+  const ACTSTART={1:0,2:40,3:80,4:104,5:128,6:152,7:153,8:233,9:313,10:393,11:473};
+  const ACTNAME={1:'the basics',2:'revision b',3:'revision c',4:'revision d',5:'recovery',6:'authored'};
+  const ROMAN={1:'I',2:'II',3:'III',4:'IV',5:'V',6:'VI'};
+  const THEME={7:'SPACE',8:'PORTALS',9:'CODE',10:'LIGHT',11:'WINTER'};
+  const THEMESUB={7:'low gravity, long jumps',8:'two doors, one sheet',
+                  9:'the sheet is its own source',10:'a white sheet, inverted',
+                  11:'ice runs fast, snow drags'};
+  let extraShown=false;
   let curAct=0;
   WORLDS.forEach((w,wi)=>{
     const act=w.act||1;
     if(SAVE.unlocked<=ACTSTART[act]) return;
     if(act!==curAct){
       curAct=act;
-      const h=document.createElement('div'); h.className='acthead';
-      h.innerHTML='<em>ACT '+ROMAN[act]+'</em><i></i><span>'+ACTNAME[act]+'</span>';
+      if(act>=7 && !extraShown){
+        extraShown=true;
+        const x=document.createElement('div'); x.className='acthead extra';
+        x.innerHTML='<em>EXTRA WORLDS</em><i></i><span>side sheets</span>';
+        p.appendChild(x);
+      }
+      const h=document.createElement('div'); h.className='acthead'+(act>=7?' theme':'');
+      h.innerHTML = act<7
+        ? '<em>ACT '+ROMAN[act]+'</em><i></i><span>'+ACTNAME[act]+'</span>'
+        : '<em>'+THEME[act]+'</em><i></i><span>'+THEMESUB[act]+'</span>';
       p.appendChild(h);
     }
     const idx=LEVELS.map((l,i)=>[l,i]).filter(a=>a[0].w===wi);
