@@ -463,8 +463,8 @@ const WORLDS = [
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.38, accel:0.5, sparse:true} },
   { act:7, code:"TIDE", name:"Tide", hint:"Gravity is a suggestion out here.",
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.46, accel:0.6, drift:1.3} },
-  { act:7, code:"APOGEE", name:"Apogee", hint:"Gravity is a suggestion out here.",
-    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.35, accel:0.5, eat:1.0} },
+  { act:7, code:"APOGEE", name:"Apogee", hint:"Barely any gravity at all, and hardly a datum in sight.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{gravity:0.28, accel:0.42, sparse:true} },
   { act:8, code:"THRESHOLD", name:"Threshold", hint:"Two doors, one sheet.",
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{} },
   { act:8, code:"PAIRED", name:"Paired", hint:"Two doors, one sheet.",
@@ -495,8 +495,8 @@ const WORLDS = [
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow', winter:true, phase:120} },
   { act:11, code:"BLIZZARD", name:"Blizzard", hint:"Ice runs fast. Snow drags. Watch the ground.",
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow', winter:true, drift:1.3, sparse:true} },
-  { act:11, code:"DEEPFREEZE", name:"Deepfreeze", hint:"Ice runs fast. Snow drags. Watch the ground.",
-    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow', winter:true, eat:1.0} },
+  { act:11, code:"DEEPFREEZE", name:"Deepfreeze", hint:"The cold bites through ice and snow now. Only bare ground thaws you.",
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{weather:'snow', winter:true, cold:1, sparse:true} },
   { act:12, code:"TRIAL", name:"Trial", hint:"A ladder of 47 sheets, easiest to hardest. Take the test to find your rank.",
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{} }
 ];
@@ -1903,7 +1903,7 @@ function loadLevel(i){
   G.driftK=MOD.drift||1;
   if(MOD.chaos) for(const m of G.movers) if(m.loose) m.faller=1;
   G.rmode=MOD.render||'normal'; G.allParts=!!MOD.allparts;
-  G.chaos=MOD.chaos||0; G.chaosT=200; G.gscale=MOD.gravity||1; G.ascale=MOD.accel||1; G.portLock=0; G.weather=MOD.weather||null; G.snowfall=null;
+  G.chaos=MOD.chaos||0; G.chaosT=200; G.gscale=MOD.gravity||1; G.ascale=MOD.accel||1; G.portLock=0; G.weather=MOD.weather||null; G.snowfall=null; G.cold=MOD.cold||0;
   G.liveDraw=!!MOD.livedraw; G.zoneI=-1;
   G.split=0; G.splitAmt=0; G.floorWarn=0; G.floorGone=0; G.invT=0;
   G.eatOn=!!MOD.eat; G.eatSpd=MOD.eat||0;
@@ -2252,14 +2252,19 @@ function step(){
 
   /* powdered snow — indistinguishable until you are in it */
   const FROSTMAX=170;
-  if(touchingTile('w')){
-    P.frost=Math.min(FROSTMAX, P.frost+1);
+  const inPowder=touchingTile('w');
+  const exposed=G.cold && (P.onIce||P.onSnow) && (P.ground||P.coyote>0);
+  if(inPowder){
+    P.frost=Math.min(FROSTMAX, P.frost+1+(G.cold?0.6:0));
     if(P.vy>1.15*P.g) P.vy=1.15*P.g;            /* you sink, you do not fall */
     P.vx*=0.88;                                  /* and you cannot run in it */
     P.dj=1;                                      /* but you can always kick back out */
     if(G.tick%4===0)
       G.fx.push({x:P.x+PW/2+(Math.random()-.5)*PW, y:P.y+PH*Math.random(),
                  vx:(Math.random()-.5)*0.8, vy:-0.5-Math.random(), life:20, sz:1.4, c:'#E4EEF6'});
+    if(P.frost>=FROSTMAX){ die('FROZEN'); return; }
+  } else if(exposed){
+    P.frost=Math.min(FROSTMAX, P.frost+0.22);           /* deep freeze: ice and snow bite too */
     if(P.frost>=FROSTMAX){ die('FROZEN'); return; }
   } else if(P.frost>0) P.frost=Math.max(0,P.frost-2);   /* thaws twice as fast as it bites */
 
@@ -2423,7 +2428,7 @@ function drawFrost(){
   ctx.fillStyle=u>0.7?C.haz:'#BFE2F5'; ctx.fillRect(bx,by,bw*u,5);
   ctx.font='600 8px ui-monospace,monospace'; ctx.textAlign='center';
   ctx.fillStyle=u>0.7?C.haz:'#BFE2F5';
-  ctx.fillText(u>0.7?'FREEZING':'SINKING', VW/2, by-4); ctx.textAlign='left';
+  ctx.fillText(u>0.7?'FREEZING':(touchingTile('w')?'SINKING':'EXPOSED'), VW/2, by-4); ctx.textAlign='left';
 }
 function drawWeather(){
   if(G.weather!=='snow'||!G.snowfall) return;
@@ -3577,7 +3582,7 @@ function loadCustom(g,cols){
   G.partsTotal=G.gems.length; G.parts=0; G.deaths=0; G.time=0; G.won=0; G.banner=110;
   G.broken.clear(); G.crumbs.clear(); G.doorOpen=false; G.phase=0; G.phaseT=0;
   G.phasePeriod=180; G.fx.length=0; G.trail.length=0;
-  G.rmode='normal'; G.allParts=false; G.chaos=0; G.eatOn=false; G.liveDraw=false; G.weather=null;
+  G.rmode='normal'; G.allParts=false; G.chaos=0; G.eatOn=false; G.liveDraw=false; G.weather=null; G.cold=0;
   G.gscale=1; G.ascale=1; G.portLock=0;
   G.drawMask=null; G.revealCols=undefined; G.cutDeleted=false; G.cutGone=false;
   G.floorGone=0; G.floorWarn=0; G.split=0; G.invT=0;
