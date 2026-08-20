@@ -40,8 +40,9 @@ Then five **extra worlds**, 80 sheets each, sitting outside the story:
 you actually play. Each sheet is scored against a par time derived from its length and
 your death count; do well and it jumps up the ladder, struggle and it drops. Six sheets
 places you, and you get a rank from **Beginner** to **Grandmaster**. Giving up on a sheet
-counts as a failure and moves you down. Trials are always unlocked and never advance
-story progression.
+counts as a failure and moves you down. Trials are never listed in the sheet list — the only way to meet one is to take the test,
+so the ladder cannot be practised. Each run also jitters which rung it picks, so retaking
+never walks the same path. They never advance story progression.
 
 ## Layout
 

@@ -3636,8 +3636,13 @@ function rankName(r){ let nm=RANKS[0][1]; for(const [lo,x] of RANKS) if(r>=lo) n
 let TRIAL0=LEVELS.findIndex(l=>l.rank!==undefined);
 const TRIALN=LEVELS.filter(l=>l.rank!==undefined).length;
 const TEST={on:false, lo:0, hi:TRIALN-1, cur:(TRIALN>>1), n:0, log:[]};
+function jitter(v,lo,hi){                    /* nudge off the exact midpoint */
+  const j=v+(Math.random()<0.5?-1:1)*(Math.random()<0.55?1:0);
+  return Math.max(lo, Math.min(hi, Math.max(0, Math.min(TRIALN-1, j))));
+}
 function startTest(){
-  TEST.on=true; TEST.lo=0; TEST.hi=TRIALN-1; TEST.cur=(TRIALN>>1); TEST.n=0; TEST.log=[];
+  TEST.on=true; TEST.lo=0; TEST.hi=TRIALN-1; TEST.n=0; TEST.log=[];
+  TEST.cur=jitter((TRIALN>>1)+(Math.random()<0.5?-1:1), 0, TRIALN-1);
   playTrial();
 }
 function playTrial(){
@@ -3662,7 +3667,7 @@ function endTrial(gaveUp){
   if(TEST.lo>TEST.hi){ const m=Math.round((TEST.lo+TEST.hi)/2); TEST.lo=TEST.hi=Math.max(0,Math.min(TRIALN-1,m)); }
   TEST.n++;
   if(TEST.n>=6 || TEST.lo>=TEST.hi) finishTest();
-  else { TEST.cur=Math.max(0,Math.min(TRIALN-1,Math.round((TEST.lo+TEST.hi)/2))); playTrial(); }
+  else { TEST.cur=jitter(Math.round((TEST.lo+TEST.hi)/2), TEST.lo, TEST.hi); playTrial(); }
 }
 function finishTest(){
   TEST.on=false; G.state='rank';
@@ -3756,6 +3761,7 @@ function buildPicker(){
   let curAct=0;
   WORLDS.forEach((w,wi)=>{
     const act=w.act||1;
+    if(act===12 && !SAVE.dev) return;           /* no practising the ranking ladder */
     if(SAVE.unlocked<=ACTSTART[act]) return;
     if(act!==curAct){
       curAct=act;
@@ -3787,7 +3793,7 @@ function buildPicker(){
     if(open){
       const cards=document.createElement('div'); cards.className='cards';
       idx.forEach(([L,i])=>{
-        const lock=(L.rank===undefined) && (i+1>SAVE.unlocked);
+        const lock=i+1>SAVE.unlocked;
         const b=document.createElement('button');
         b.className='card'+(lock?' lock':'')+(i===G.lvl?' cur':'');
         b.disabled=lock;
