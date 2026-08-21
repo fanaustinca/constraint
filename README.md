@@ -98,6 +98,16 @@ press **Paste code**, and they have your level. No tile character is a digit, so
 parse unambiguously; decoding validates the column count and total tile count and refuses
 anything malformed.
 
+## Daily and ghosts
+
+**Daily** composes one sheet from the date with a seeded PRNG, so every copy of the game
+builds the same sheet on the same day with nothing sent anywhere. Difficulty rotates across
+five tiers; clearing it advances a streak.
+
+**Ghosts** record your best run on a sheet, sampled every third frame and delta encoded to
+roughly five characters a sample. Beat your time and it replaces the recording. The last 24
+are kept. Trials never record one — the ranking test is meant to be met cold.
+
 ## Controls
 
 Arrows or WASD to move · Space/W/Up to jump (hold for height) · Shift/X to dash ·

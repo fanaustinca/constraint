@@ -229,6 +229,7 @@ button.tiny{padding:5px 10px; font-size:10px; letter-spacing:.1em}
     <span class="field"><span class="k">T</span><span class="v" id="hudTime">0.00</span></span>
     <span class="field"><span class="k">Deaths</span><span class="v" id="hudDeaths">0</span></span>
     <span class="field"><span class="k">Parts</span><span class="v" id="hudParts">0/3</span></span>
+    <span class="field hidden" id="streakTag"><span class="k">Streak</span><span class="v hi" id="streakVal">0</span></span>
     <span class="field hidden" id="rankTag"><span class="k">Rank</span><span class="v hi" id="rankVal">—</span></span>
     <span class="field hidden" id="devTag"><span class="v hi">DEV</span></span>
   </div>
@@ -246,6 +247,7 @@ button.tiny{padding:5px 10px; font-size:10px; letter-spacing:.1em}
           <button id="btnLevels">Sheets</button>
           <button id="btnHow">Controls</button>
           <button id="btnTest">Take the test</button>
+          <button id="btnDaily">Daily</button>
           <button class="hidden" id="btnBuild">Build</button>
         </div>
       </div>
@@ -1599,7 +1601,7 @@ const SFX={
 
 /* ------------------------------ save -------------------------------- */
 const SKEY='constraint.save.v1';
-let SAVE={unlocked:1, best:{}, parts:{}, skipped:{}, cuts:{}, rank:0, dev:0, mute:false};
+let SAVE={unlocked:1, best:{}, parts:{}, skipped:{}, cuts:{}, rank:0, daily:null, ghosts:{}, dev:0, mute:false};
 try{ const r=localStorage.getItem(SKEY); if(r) SAVE=Object.assign(SAVE,JSON.parse(r)); }catch(e){}
 A.on=!SAVE.mute;
 function save(){ try{ localStorage.setItem(SKEY,JSON.stringify(SAVE)); }catch(e){} }
@@ -1830,7 +1832,9 @@ function applyDrift(k){
   }
 }
 function loadLevel(i){
-  const L=LEVELS[i]; G.lvl=i;
+  const obj=(typeof i==='object' && i);
+  const L=obj||LEVELS[i];
+  G.lvl = obj ? (obj.daily?-2:-1) : i;
   const WD=WORLDS[L.w], MOD=Object.assign({}, WD.mod||{}, L.mod||{});
   G.mod=MOD; G.zones=null;
   G.ab=Object.assign({}, WD.ab);
@@ -1901,6 +1905,7 @@ function loadLevel(i){
   G.eater={front:-120, st:'idle', t:0, tgt:null, i:0, cx:-60, cy:VH*0.4, sx:0, sy:0};
   G.grid0=G.grid.map(r=>r.slice());
   if(G.eatOn || (L.zones && L.zones.some(z=>z.eat))) buildPieces();
+  loadGhost();
   respawn(true);
   document.getElementById('hint').textContent=WORLDS[L.w].hint;
   syncHud();
@@ -2318,6 +2323,7 @@ function step(){
 
   G.cam += (camTarget()-G.cam)*0.11;
 
+  if(G.rec && G.tick%3===0 && G.rec.length<GHOST_CAP) G.rec.push([P.x,P.y]);
   if(G.liveDraw){
     const want=Math.floor((P.x+PW)/TS)+18;
     if(want>G.revealCols){
@@ -2439,9 +2445,11 @@ function updateFx(){
 function win(){
   if(G.won) return;
   G.won=1; G.state='done'; SFX.win(); G.shake=6;
+  saveGhost();
   if(TEST.on){ endTrial(false); return; }
   for(let i=0;i<30;i++){ const a=Math.random()*6.28,s=1+Math.random()*4;
     G.fx.push({x:G.exit.x,y:G.exit.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:40,c:'#3FDCA0',sz:2}); }
+  if(G.lvl===-2){ recordDaily(); showDone(false); return; }
   if(G.lvl<0){ showDone(false); return; }        /* a sheet of your own — nothing to record */
   const i=G.lvl, t=G.time;
   if(LEVELS[i].rank!==undefined){                /* trials are a ladder, not progression */
@@ -3482,6 +3490,7 @@ function draw(){
   }
   if(sq>0) ctx.restore();
   drawFx();
+  if(G.state!=='cut') drawGhost();
   if(!G.cutGone && !osScene) drawPlayer();
   drawPortals();
   if(G.eatOn && G.state!=='cut') drawEater();
@@ -3498,6 +3507,7 @@ function draw(){
   ctx.restore();
   if(G.state==='cut'){ drawCut(); return; }
   drawWeather();
+  drawGhostTag();
   drawFrost();
   drawProgress();
   drawOverlayText();
@@ -3616,6 +3626,139 @@ function drawEditor(){
   ctx.fillText('BUILD · '+ED.cols+' COLUMNS · ARROWS PAN · CLICK TO PLACE ['+ED.tool+']', 12, 16);
 }
 
+/* ---------------------------- ghosts ---------------------------------
+   Your best run on a sheet, sampled every third frame and delta encoded.
+   Trials never record one — the test is meant to be met cold.
+   -------------------------------------------------------------------- */
+const GHOST_MAX=24, GHOST_CAP=4200;
+function ghostKey(){
+  if(G.lvl>=0) return (LEVELS[G.lvl] && LEVELS[G.lvl].rank!==undefined) ? null : 'L'+G.lvl;
+  if(G.lvl===-2) return 'D'+(G.dailyKey||'');
+  return null;
+}
+function encGhost(a){
+  const out=[]; let px=0, py=0;
+  for(const p of a){
+    const x=Math.round(p[0]), y=Math.round(p[1]);
+    out.push((x-px).toString(36)+'.'+(y-py).toString(36));
+    px=x; py=y;
+  }
+  return out.join(',');
+}
+function decGhost(str){
+  if(!str) return null;
+  const a=[]; let px=0, py=0;
+  for(const part of str.split(',')){
+    const k=part.indexOf('.'); if(k<1) continue;
+    px+=parseInt(part.slice(0,k),36); py+=parseInt(part.slice(k+1),36);
+    if(!isFinite(px)||!isFinite(py)) return null;
+    a.push([px,py]);
+  }
+  return a.length?a:null;
+}
+function loadGhost(){
+  G.rec=[]; G.ghost=null; G.ghostT=0;
+  const k=ghostKey(); if(!k) return;
+  const g=(SAVE.ghosts||{})[k];
+  if(g){ G.ghost=decGhost(g.d); G.ghostT=g.t; }
+}
+function saveGhost(){
+  const k=ghostKey(); if(!k || !G.rec || G.rec.length<4) return;
+  SAVE.ghosts=SAVE.ghosts||{};
+  const prev=SAVE.ghosts[k];
+  if(prev && prev.t<=G.time) return;                 /* only a better run replaces it */
+  delete SAVE.ghosts[k];                              /* re-insert so order is recency */
+  SAVE.ghosts[k]={t:+G.time.toFixed(2), d:encGhost(G.rec)};
+  const keys=Object.keys(SAVE.ghosts);
+  while(keys.length>GHOST_MAX){ delete SAVE.ghosts[keys.shift()]; }
+  save();
+}
+function drawGhost(){
+  if(!G.ghost) return;
+  const i=Math.floor(G.time*20);
+  if(i<0 || i>=G.ghost.length) return;
+  const p=G.ghost[i];
+  ctx.globalAlpha=0.40;
+  ctx.strokeStyle=C.cyan; ctx.lineWidth=1.4; dash(false);
+  rr(p[0]+0.5, p[1]+0.5, PW-1, PH-1, 3); ctx.stroke();
+  ctx.globalAlpha=0.16; ctx.fillStyle=C.cyan;
+  rr(p[0], p[1], PW, PH, 3); ctx.fill();
+  ctx.globalAlpha=1;
+}
+function drawGhostTag(){
+  if(!G.ghost || G.state!=='play') return;
+  ctx.font='600 9px ui-monospace,monospace'; ctx.textAlign='left';
+  ctx.fillStyle='rgba(76,201,232,.75)';
+  ctx.fillText('RACING YOUR BEST · '+fmt(G.ghostT)+'s', 12, VH-26);
+}
+
+/* ---------------------------- the daily ------------------------------
+   Composed from the date, so every copy of the game builds the same sheet
+   on the same day without anything being sent anywhere.
+   -------------------------------------------------------------------- */
+const POOL_E=['gap','stair','spike','float','pit','climb','thin','mesa','dip','roof','pillar','ministep','nook'];
+const POOL_M=['chamf','wide','crumb','crumbup','lift','ferry','twin','ice','orbit','bridge','hover','zigrise',
+              'pinch','slide','towerup','lift2','teethrun','needle','icelong','snowlong','icesnow'];
+const POOL_H=['shaft','chimney','spring','blade','ceil','mirror','flipwall','phase','dgap','updraft','span',
+              'leap','teeth','ladder','sawspan','crossing','springpit','hopline','crumbrun','sawgap','vault',
+              'icegap','snowpit','icehang','snowdrift','pgate','pdrop','ploop'];
+function dayKey(d){
+  d=d||new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function hash32(str){
+  let h=2166136261>>>0;
+  for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619)>>>0; }
+  return h>>>0;
+}
+function seeded(a){
+  return function(){
+    a=(a+0x6D2B79F5)>>>0;
+    let t=Math.imul(a^(a>>>15), 1|a);
+    t=(t+Math.imul(t^(t>>>7), 61|t))^t;
+    return ((t^(t>>>14))>>>0)/4294967296;
+  };
+}
+function makeDaily(key){
+  const r=seeded(hash32('constraint/'+key));
+  const tier=Math.floor(r()*5);
+  const pools=[POOL_E, POOL_E.concat(POOL_M), POOL_M, POOL_M.concat(POOL_H), POOL_H];
+  const mods=[{}, {phase:120}, {sparse:true}, {drift:1.3, sparse:true}, {nodatum:true, chaos:0.5}];
+  const wx=WORLDS.findIndex(w=>w.code==='TRIAL');
+  const len=5+Math.floor(r()*3), pool=pools[tier], used=new Set(), seq=['st'];
+  for(let k=0;k<len;k++){
+    let c, guard=0;
+    do{ c=pool[Math.floor(r()*pool.length)]; guard++; } while(used.has(c) && guard<50);
+    used.add(c); seq.push(c);
+  }
+  seq.push(r()<0.25?'ex2':'ex');
+  return {w:wx, name:'Daily · '+key, chunks:seq, mod:mods[tier], daily:true,
+          tier:['gentle','steady','sharp','mean','brutal'][tier]};
+}
+function playDaily(){
+  const key=dayKey();
+  G.dailyKey=key;
+  const L=makeDaily(key);
+  G.state='play'; showOv(null); loadLevel(L); ac();
+}
+function setStreakTag(){
+  const d=SAVE.daily||{};
+  const has=!!d.streak;
+  $('streakTag').classList.toggle('hidden', !has);
+  if(has) $('streakVal').textContent=d.streak+(d.date===dayKey()&&d.done?' ✓':'');
+}
+function recordDaily(){
+  const key=dayKey(), d=SAVE.daily||{streak:0,date:null,done:false};
+  if(d.date===key && d.done){
+    if(G.time<(d.time||1e9)){ d.time=+G.time.toFixed(2); d.deaths=G.deaths; }
+  } else {
+    const y=new Date(); y.setDate(y.getDate()-1);
+    d.streak = (d.date===dayKey(y)) ? (d.streak||0)+1 : 1;
+    d.date=key; d.done=true; d.time=+G.time.toFixed(2); d.deaths=G.deaths;
+  }
+  SAVE.daily=d; save(); setStreakTag();
+}
+
 /* ---------------------------- the test -------------------------------
    47 sheets ordered easiest to hardest.  Start in the middle, then binary
    search on how well you actually played: six sheets is enough to place you.
@@ -3690,6 +3833,11 @@ const OVS=['ovMenu','ovLevels','ovHow','ovPause','ovDone','ovRank'];
 function showOv(id){ OVS.forEach(o=>$(o).classList.toggle('on',o===id)); }
 function fmt(t){ return t.toFixed(2); }
 function syncHud(){
+  if(G.lvl===-2){
+    $('hudLv').textContent=G.dailyKey||'daily'; $('hudCon').textContent='DAILY';
+    $('hudParts').textContent=G.parts+'/'+(G.partsTotal||0);
+    $('hudDeaths').textContent=G.deaths; return;
+  }
   if(G.lvl<0){
     $('hudLv').textContent='—  your sheet'; $('hudCon').textContent='BUILD';
     $('hudParts').textContent=G.parts+'/'+(G.partsTotal||0);
@@ -3716,6 +3864,7 @@ function skipLevel(){
 }
 function nextLevel(){
   if(G.state!=='done') return;
+  if(G.lvl===-2){ G.state='menu'; showOv('ovMenu'); return; }
   if(G.lvl<0){ openBuild(); return; }
   const gate={39:1, 79:2, 103:3, 127:4, 151:5, 152:6}[G.lvl];
   if(gate && !(SAVE.cuts&&SAVE.cuts[gate])){ startCut(gate); return; }
@@ -3723,6 +3872,13 @@ function nextLevel(){
 }
 function showDone(isBest){
   const i=G.lvl;
+  if(i===-2){
+    const d=SAVE.daily||{};
+    $('doneTitle').textContent='Daily cleared';
+    $('dTime').textContent=fmt(G.time); $('dBest').textContent=d.time!==undefined?fmt(d.time):'—';
+    $('dDeaths').textContent=G.deaths; $('dParts').textContent='×'+(d.streak||1)+' streak';
+    $('btnNext').textContent='Menu'; showOv('ovDone'); return;
+  }
   if(i<0){
     $('doneTitle').textContent='Your sheet works';
     $('dTime').textContent=fmt(G.time); $('dBest').textContent='—';
@@ -3858,6 +4014,8 @@ $('btnLevels').onclick=()=>{ buildPicker(); showOv('ovLevels'); };
 $('btnBack').onclick=()=>showOv('ovMenu');
 $('btnHow').onclick=()=>showOv('ovHow');
 $('btnTest').onclick=startTest;
+$('btnDaily').onclick=playDaily;
+setStreakTag();
 $('btnRankAgain').onclick=startTest;
 $('btnRankDone').onclick=()=>{ G.state='menu'; showOv('ovMenu'); };
 $('btnGiveUp').onclick=()=>{ if(TEST.on) endTrial(true); };
@@ -3867,7 +4025,8 @@ $('btnResume').onclick=togglePause;
 $('btnSkip').onclick=()=>{ if(G.state==='pause') skipLevel(); };
 $('btnRetry2').onclick=()=>{ G.state='play'; showOv(null); const d=G.deaths+1; loadLevel(G.lvl); G.deaths=d; syncHud(); };
 $('btnQuit').onclick=()=>{ TEST.on=false; $('btnGiveUp').classList.add('hidden'); G.state='menu'; buildPicker(); showOv('ovLevels'); };
-$('btnRetry').onclick=()=>{ G.state='play'; showOv(null); if(G.lvl<0) loadCustom(ED.grid,ED.cols); else loadLevel(G.lvl); };
+$('btnRetry').onclick=()=>{ G.state='play'; showOv(null);
+  if(G.lvl===-2) playDaily(); else if(G.lvl<0) loadCustom(ED.grid,ED.cols); else loadLevel(G.lvl); };
 $('btnNext').onclick=nextLevel;
 $('btnList').onclick=()=>{ G.state='menu'; buildPicker(); showOv('ovLevels'); };
 const DEVCODE='AF010114';
@@ -3915,7 +4074,7 @@ $('devCode').addEventListener('keydown',e=>{
   if(e.key==='Enter'){ e.preventDefault(); tryCode(); }
 });
 setDevTag();
-$('btnWipe').onclick=()=>{ SAVE={unlocked:1,best:{},parts:{},skipped:{},cuts:{},rank:0,dev:0,mute:SAVE.mute}; save(); buildPicker(); setDevTag(); };
+$('btnWipe').onclick=()=>{ SAVE={unlocked:1,best:{},parts:{},skipped:{},cuts:{},rank:0,daily:null,ghosts:{},dev:0,mute:SAVE.mute}; save(); buildPicker(); setDevTag(); };
 $('sheetCount').textContent=(SAVE.unlocked>40?LEVELS.length+' sheets · 5 acts':'40 sheets · 5 constraints');
 $('btnPlay').textContent = SAVE.unlocked>1 ? 'Continue' : 'Start';
 
