@@ -198,6 +198,23 @@ button.tiny{padding:5px 10px; font-size:10px; letter-spacing:.1em}
 .palette{display:flex; gap:3px; flex-wrap:wrap}
 .palette button{padding:4px 7px; font-size:10px; letter-spacing:0; min-width:26px}
 .palette button.on{border-color:var(--accent); color:var(--accent); background:var(--panel2)}
+.palette button.lk{border-style:dashed; opacity:.62}
+/* the block palette shows each tile as it is drawn, with its name under it */
+#palette{gap:4px}
+#palette button{
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  width:54px; min-width:0; padding:5px 2px 4px;
+  font-size:8px; line-height:1.15; letter-spacing:.04em; text-transform:uppercase;
+}
+#palette canvas{display:block; width:26px; height:26px}
+#palette .pn{color:var(--text-faint)}
+#palette button.on .pn{color:var(--accent)}
+.bdesc{
+  font-size:10px; letter-spacing:.06em; color:var(--text-dim);
+  min-height:13px; margin-top:-3px;
+}
+.bhint{font-size:10px; color:var(--text-faint)}
+.buildpanel .brow.locked .blabel{color:var(--datum)}
 #bCode{
   font-family:var(--mono); font-size:10px; color:var(--text); background:var(--panel);
   border:1px solid var(--gridmaj); padding:7px; height:54px; resize:vertical; outline:none;
@@ -363,6 +380,16 @@ body.embed .buildpanel{
         </div>
       </div>
 
+      <div class="ov" id="ovAd">
+        <div class="dimline"><i></i><span id="adKind">optional unlock</span><i></i></div>
+        <h2 id="adText">Unlock</h2>
+        <p id="adSub"></p>
+        <div class="row">
+          <button class="primary" id="adGo">Watch a video</button>
+          <button id="adNo">Not now</button>
+        </div>
+      </div>
+
       <div class="ov" id="ovDone">
         <h2 id="doneTitle">Fully defined</h2>
         <div class="readout">
@@ -390,6 +417,16 @@ body.embed .buildpanel{
       <div class="brow">
         <span class="blabel">Block</span>
         <span class="palette" id="palette"></span>
+      </div>
+      <div class="bdesc" id="bDesc"></div>
+      <div class="brow">
+        <span class="blabel">Theme</span>
+        <span class="palette" id="bThemes"></span>
+      </div>
+      <div class="brow">
+        <span class="blabel">Remix</span>
+        <button class="tiny" id="bRemix">Open an official sheet</button>
+        <span class="bhint">Loads its geometry in to take apart. Moving platforms and saws are not carried across.</span>
       </div>
       <div class="brow">
         <span class="blabel">Width</span>
@@ -1640,6 +1677,16 @@ const SFX={
    -------------------------------------------------------------------- */
 const ADS={
   ready:false, playing:false,
+  /* --- pacing ----------------------------------------------------------
+     Poki rate-limits commercialBreak() on their side; this is our own floor
+     underneath it. Only time actually spent playing counts, the break is only
+     ever requested at the moment a sheet is finished, and it lands before an
+     interlude rather than cutting into one. Nothing is gated on it: if the
+     request is refused or the SDK is absent the game carries straight on.
+     -------------------------------------------------------------------- */
+  clock:0, gap:6*60*1000,
+  tick(ms){ ADS.clock=Math.min(ADS.gap*4, ADS.clock+ms); },
+  due(){ return ADS.clock>=ADS.gap; },
   init(){
     if(!window.PokiSDK) return Promise.resolve();
     return PokiSDK.init().then(()=>{ ADS.ready=true; }).catch(()=>{});
@@ -1650,6 +1697,7 @@ const ADS={
   playStop(){ if(!ADS.playing) return; ADS.playing=false;
     try{ window.PokiSDK && PokiSDK.gameplayStop(); }catch(e){} },
   break(then){
+    ADS.clock=0;
     if(!window.PokiSDK){ then(); return; }
     const wasOn=A.on;
     try{
@@ -1671,8 +1719,68 @@ const ADS={
 
 /* ------------------------------ save -------------------------------- */
 const SKEY='constraint.save.v1';
-let SAVE={unlocked:1, best:{}, parts:{}, skipped:{}, cuts:{}, rank:0, daily:null, ghosts:{}, dev:0, mute:false};
-try{ const r=localStorage.getItem(SKEY); if(r) SAVE=Object.assign(SAVE,JSON.parse(r)); }catch(e){}
+let SAVE={unlocked:1, best:{}, parts:{}, skipped:{}, cuts:{}, rank:0, daily:null, ghosts:{}, dev:0, mute:false, unl:null};
+/* Whatever comes back out of localStorage is treated as hostile: it is the one
+   input to this game that another script on the origin could have written, and
+   half of it is concatenated into the sheet list as markup. Object.assign is
+   avoided on purpose — it routes through [[Set]], so a JSON "__proto__" key
+   would re-point SAVE's prototype. Copy own keys, then coerce every field to
+   the shape the game expects and drop anything that will not coerce. */
+function numMap(o, max){
+  const out={};
+  if(o && typeof o==='object' && !Array.isArray(o))
+    for(const k of Object.keys(o)){
+      if(!/^-?\d+$/.test(k)) continue;
+      const v=+o[k];
+      if(isFinite(v)) out[k]=(max===undefined?v:Math.max(0,Math.min(max,v)));
+    }
+  return out;
+}
+function strMap(o, cap){
+  const out={};
+  if(o && typeof o==='object' && !Array.isArray(o))
+    for(const k of Object.keys(o)){
+      if(k==='__proto__') continue;
+      const v=o[k];
+      if(typeof v==='string' && v.length<=cap) out[k]=v;
+    }
+  return out;
+}
+function flagMap(o){
+  const out={};
+  if(o && typeof o==='object' && !Array.isArray(o))
+    for(const k of Object.keys(o)) if(k!=='__proto__' && o[k]) out[k]=1;
+  return out;
+}
+try{
+  const r=localStorage.getItem(SKEY);
+  if(r){
+    const j=JSON.parse(r);
+    if(j && typeof j==='object' && !Array.isArray(j))
+      for(const k of Object.keys(j)) if(k!=='__proto__') SAVE[k]=j[k];
+  }
+}catch(e){}
+SAVE.unlocked = Math.max(1, Math.min(LEVELS.length, Math.floor(+SAVE.unlocked)||1));
+SAVE.rank     = Math.max(0, Math.min(64, Math.floor(+SAVE.rank)||0));
+SAVE.dev      = SAVE.dev?1:0;
+SAVE.mute     = !!SAVE.mute;
+SAVE.best     = numMap(SAVE.best);
+SAVE.parts    = numMap(SAVE.parts, 99);
+SAVE.skipped  = numMap(SAVE.skipped, 1);
+SAVE.cuts     = numMap(SAVE.cuts, 1);
+SAVE.builds   = strMap(SAVE.builds, 60000);
+if(!SAVE.daily || typeof SAVE.daily!=='object' || Array.isArray(SAVE.daily)) SAVE.daily=null;
+{ const g={};
+  if(SAVE.ghosts && typeof SAVE.ghosts==='object' && !Array.isArray(SAVE.ghosts))
+    for(const k of Object.keys(SAVE.ghosts)){
+      if(k==='__proto__') continue;
+      const v=SAVE.ghosts[k];
+      if(v && typeof v==='object' && typeof v.d==='string' && v.d.length<=12000 && isFinite(+v.t))
+        g[k]={t:+v.t, d:v.d};
+    }
+  SAVE.ghosts=g; }
+SAVE.unl = (SAVE.unl && typeof SAVE.unl==='object' && !Array.isArray(SAVE.unl)) ? SAVE.unl : {};
+SAVE.unl.th=flagMap(SAVE.unl.th); SAVE.unl.wr=flagMap(SAVE.unl.wr);
 A.on=!SAVE.mute;
 function save(){ try{ localStorage.setItem(SKEY,JSON.stringify(SAVE)); }catch(e){} }
 
@@ -1862,14 +1970,14 @@ function drawEater(){
   }
   drawCursor(E.cx, E.cy, E.st==='menu');
 }
-function winterize(){
+function winterize(pow){
   /* the top surface of the sheet becomes long alternating bands */
   for(let cx=0;cx<COLS;cx++){
     const band=Math.floor(cx/11)%3;               // plain, ice, snow — ~11 columns each
     if(band===0) continue;
     const ch=band===1?'I':'n';
     /* every third snow band hides a pocket of powder two deep */
-    const powder = band===2 && (Math.floor(cx/11)%6===2) && (cx%11)>=3 && (cx%11)<=6;
+    const powder = pow!==false && band===2 && (Math.floor(cx/11)%6===2) && (cx%11)>=3 && (cx%11)<=6;
     for(let cy=1;cy<ROWS;cy++){
       if(G.grid[cy][cx]==='#' && G.grid[cy-1][cx]==='.'){
         G.grid[cy][cx]=powder?'w':ch;
@@ -3596,11 +3704,50 @@ function draw(){
    Paint a sheet, save it locally, compile it to a code you can hand to
    someone else. No tile character is a digit, so run-lengths parse cleanly.
    -------------------------------------------------------------------- */
-const PALETTE=[['#','solid'],['S','polish'],['I','ice'],['=','thin'],['~','crumb'],
-  ['^','spike'],['v','v-spike'],['B','spring'],['G','mirror'],['W','updraft'],
-  ['T','phase A'],['t','phase B'],['K','key'],['D','door'],['o','part'],
-  ['n','snow'],['w','powder'],['C','datum'],['p','portal A'],['q','portal B'],['P','spawn'],['X','exit'],['.','erase']];
-function encodeGrid(g,cols){
+const BTHEMES=[
+  {k:'blueprint', n:'Blueprint', s:'the drawing exactly as drawn',   free:1, mod:{}},
+  {k:'cursor',    n:'Cursor',    s:'the deleter loose in your sheet',free:1, mod:{eat:1.15}},
+  {k:'space',     n:'Space',     s:'low gravity, long slow jumps',   mod:{gravity:0.42, accel:0.55}},
+  {k:'code',      n:'Code',      s:'the sheet as its own source',    mod:{render:'code'}},
+  {k:'whiteout',  n:'Whiteout',  s:'a white sheet, everything inverted', mod:{render:'light'}},
+  {k:'winter',    n:'Winter',    s:'ice runs fast, snow drags',      mod:{weather:'snow', winter:true}},
+  {k:'chaos',     n:'Chaos',     s:'glitched, drifting, coming apart', mod:{render:'glitch', chaos:0.85, drift:1.3}}
+];
+function bTheme(k){ return BTHEMES.find(t=>t.k===k)||BTHEMES[0]; }
+/* the theme name in a share code is a string someone else wrote — match it
+   against the table rather than indexing the save with it, or names carried
+   on Object.prototype ("constructor", "valueof") read back as unlocked */
+function themeOwned(k){
+  const t=BTHEMES.find(x=>x.k===k);
+  if(!t) return false;
+  return !!t.free || SAVE.unl.th[k]===1;
+}
+const PALETTE=[
+  ['#','Solid',      'Solid block. Stands on it, blocks it, wall-slides down it.'],
+  ['S','Polished',   'Solid, but nothing to grab: no wall slide and no wall jump.'],
+  ['I','Ice',        'Solid and slippery. You keep sliding after you stop steering.'],
+  ['n','Snow',       'Solid, but it drags. Running across it is slow going.'],
+  ['=','Thin',       'Land on it from above, jump up through it, press \u2193 to drop through.'],
+  ['~','Crumbling',  'Holds you a moment, breaks, then comes back a few seconds later.'],
+  ['^','Spikes up',  'Kills on touch. Sits on the floor pointing up.'],
+  ['v','Spikes down','Kills on touch. Hangs from the ceiling pointing down.'],
+  ['w','Powder',     'Looks exactly like snow in play. You sink in, cannot run, and freeze.'],
+  ['B','Spring',     'Throws you far higher than any jump. Three tiles wide reads best.'],
+  ['W','Updraft',    'Rising air. Walk in and it carries you up; steer out of the top.'],
+  ['G','Mirror pad', 'Flips gravity the instant you touch it. Put one overhead to come back down.'],
+  ['p','Portal A',   'Pairs with the nearest Portal B. Touch one, come out the other.'],
+  ['q','Portal B',   'The far end of a portal pair.'],
+  ['T','Phase A',    'Solid while Phase B is gone. The two trade places on a timer.'],
+  ['t','Phase B',    'Solid while Phase A is gone. The two trade places on a timer.'],
+  ['K','Key',        'Take it to release every door on the sheet.'],
+  ['D','Door',       'Solid until every key on the sheet has been taken.'],
+  ['o','Part',       'Optional pickup. Three to a sheet is what the drawing uses.'],
+  ['C','Datum',      'Respawn point. Touch it and dying sends you back here, not to the start.'],
+  ['P','Spawn',      'Where you start. One per sheet — placing a new one moves it.'],
+  ['X','Exit',       'Where the sheet ends. One per sheet.'],
+  ['.','Erase',      'Clear a cell back to empty.']
+];
+function encodeGrid(g,cols,theme){
   let flat='';
   for(let y=0;y<ROWS;y++) for(let x=0;x<cols;x++) flat+=(g[y][x]||'.');
   let out='';
@@ -3608,24 +3755,47 @@ function encodeGrid(g,cols){
     let j=i; while(j<flat.length && flat[j]===flat[i]) j++;
     out+=flat[i]+((j-i)>1?String(j-i):''); i=j;
   }
-  return 'CS1.'+cols+'.'+out;
+  /* v2 names the theme in its own field. The body can begin with a lowercase
+     tile character, so the theme goes before it and the version tells them
+     apart — v1 codes handed round before this still load. */
+  return 'CS2.'+cols+'.'+(theme||'blueprint')+'.'+out;
 }
+const TILECH=new Set(PALETTE.map(p=>p[0]));
 function decodeGrid(code){
-  const m=/^CS1\.(\d+)\.([\s\S]*)$/.exec((code||'').trim());
+  /* a share code arrives from someone else, so nothing in it is trusted:
+     the length is capped before the loop, each run length is checked
+     BEFORE it is expanded (a 12-character code could otherwise ask for a
+     half-gigabyte string and take the tab with it), and every character
+     has to be one you could actually have painted. */
+  const raw=(code||'').trim();
+  if(raw.length>40000) return null;
+  let m=/^CS2\.(\d+)\.([a-z]{1,16})\.([\s\S]*)$/.exec(raw), theme='blueprint';
+  if(m) theme=m[2];
+  else { m=/^CS1\.(\d+)\.([\s\S]*)$/.exec(raw); if(m) m=[m[0],m[1],'blueprint',m[2]]; }
   if(!m) return null;
-  const cols=+m[1], body=m[2].replace(/\s+/g,'');
-  if(!(cols>=32 && cols<=192)) return null;
+  const cols=+m[1], body=m[3].replace(/\s+/g,'');
+  if(!(cols>=32 && cols<=1088)) return null;
+  /* the theme field is the one place a code could carry free text, so a name
+     that is not in the table becomes blueprint here rather than travelling */
+  if(!BTHEMES.some(t=>t.k===theme)) theme='blueprint';
+  const cap=cols*ROWS;
   let flat='';
   for(let i=0;i<body.length;){
-    const ch=body[i++]; let num='';
-    while(i<body.length && body[i]>='0' && body[i]<='9') num+=body[i++];
-    flat+=ch.repeat(num?+num:1);
-    if(flat.length>cols*ROWS+8) return null;
+    const ch=body[i++];
+    if(!TILECH.has(ch)) return null;
+    let num='';
+    while(i<body.length && body[i]>='0' && body[i]<='9'){
+      if(num.length>=5) return null;
+      num+=body[i++];
+    }
+    const n=num?+num:1;
+    if(n<1 || flat.length+n>cap) return null;
+    flat+=ch.repeat(n);
   }
-  if(flat.length!==cols*ROWS) return null;
+  if(flat.length!==cap) return null;
   const g=[];
   for(let y=0;y<ROWS;y++) g.push(flat.slice(y*cols,(y+1)*cols).split(''));
-  return {g,cols};
+  return {g,cols,theme};
 }
 function blankGrid(cols){
   const g=[];
@@ -3637,9 +3807,26 @@ function blankGrid(cols){
   g[ROWS-4][1]='P'; g[ROWS-4][cols-3]='X';
   return g;
 }
-const ED={grid:null, cols:64, tool:'#', slot:1, painting:false};
+const ED={grid:null, cols:64, tool:'#', slot:1, painting:false, theme:'blueprint'};
+/* the geometry of an official sheet, opened up for taking apart. Movers and
+   saws live beside the grid rather than in it, so they do not come across. */
+function gridFromLevel(i){
+  const L=LEVELS[i]; if(!L) return null;
+  const seg=L.chunks.map(id=>CHUNKS[id]), cols=seg.length*CW, g=[];
+  for(let y=0;y<ROWS;y++){ let row=''; for(const c of seg) row+=c.t[y]; g.push(row.split('')); }
+  let hasP=false, hasX=false;                 /* exactly one spawn and one exit */
+  for(let y=0;y<ROWS;y++) for(let x=0;x<cols;x++){
+    const ch=g[y][x];
+    if(ch==='P'){ if(hasP) g[y][x]='.'; hasP=true; }
+    else if(ch==='X'){ if(hasX) g[y][x]='.'; hasX=true; }
+  }
+  if(!hasP) g[ROWS-4][1]='P';
+  if(!hasX) g[ROWS-4][cols-3]='X';
+  return {g,cols};
+}
 function loadCustom(g,cols){
-  G.lvl=-1; G.mod={}; G.zones=null; G.zoneI=-1;
+  const MOD=Object.assign({}, bTheme(ED.theme).mod||{});
+  G.lvl=-1; G.mod=MOD; G.zones=null; G.zoneI=-1;
   G.ab={dj:true,wall:true,inv:true,dash:true};
   COLS=cols; G.grid=g.map(r=>r.slice());
   G.gems=[]; G.keys=[]; G.movers=[]; G.saws=[]; G.checks=[]; G.portA=[]; G.portB=[]; G.spawn=null;
@@ -3657,14 +3844,26 @@ function loadCustom(g,cols){
   }
   if(!G.spawn) G.spawn={x:TS+5, y:(ROWS-4)*TS+(TS-PH)};
   pairPortals();
+  /* the theme rewrites the sheet the same way a world does — but no powder,
+     since a hidden killing tile dropped into geometry you drew yourself can
+     make a sheet you had already tested impossible */
+  if(MOD.winter) winterize(false);
+  if(MOD.drift) applyDrift(MOD.drift); else if(MOD.chaos) applyDrift(0.9);
+  G.driftK=MOD.drift||1;
+  if(MOD.chaos) for(const m of G.movers) if(m.loose) m.faller=1;
   G.grid0=G.grid.map(r=>r.slice());
   G.partsTotal=G.gems.length; G.parts=0; G.deaths=0; G.time=0; G.won=0; G.banner=110;
   G.broken.clear(); G.crumbs.clear(); G.doorOpen=false; G.phase=0; G.phaseT=0;
-  G.phasePeriod=180; G.fx.length=0; G.trail.length=0;
-  G.rmode='normal'; G.allParts=false; G.chaos=0; G.eatOn=false; G.liveDraw=false; G.weather=null; G.cold=0;
-  G.gscale=1; G.ascale=1; G.portLock=0;
+  G.phasePeriod=MOD.phase||180; G.fx.length=0; G.trail.length=0;
+  G.rmode=MOD.render||'normal'; G.allParts=false;
+  G.chaos=MOD.chaos||0; G.chaosT=200; G.liveDraw=false;
+  G.weather=MOD.weather||null; G.snowfall=null; G.cold=MOD.cold||0;
+  G.gscale=MOD.gravity||1; G.ascale=MOD.accel||1; G.portLock=0;
+  G.eatOn=!!MOD.eat; G.eatSpd=MOD.eat||0;
+  G.eater={front:-120, st:'idle', t:0, tgt:null, i:0, cx:-60, cy:VH*0.4, sx:0, sy:0};
   G.drawMask=null; G.revealCols=undefined; G.cutDeleted=false; G.cutGone=false;
   G.floorGone=0; G.floorWarn=0; G.split=0; G.invT=0;
+  if(G.eatOn) buildPieces();
   respawn(true); syncHud();
 }
 function edTile(e){
@@ -3702,7 +3901,8 @@ function drawEditor(){
   ctx.strokeRect(0.5,0.5,ED.cols*TS-1,ROWS*TS-1);
   ctx.restore();
   ctx.font='600 9px ui-monospace,monospace'; ctx.fillStyle=C.faint; ctx.textAlign='left';
-  ctx.fillText('BUILD · '+ED.cols+' COLUMNS · ARROWS PAN · CLICK TO PLACE ['+ED.tool+']', 12, 16);
+  ctx.fillText('BUILD · '+ED.cols+' COLUMNS · '+bTheme(ED.theme).n.toUpperCase()+
+               ' · ARROWS PAN · CLICK TO PLACE ['+ED.tool+']', 12, 16);
 }
 
 /* ---------------------------- ghosts ---------------------------------
@@ -3908,7 +4108,7 @@ function setRankTag(){
 
 /* -------------------------------- UI -------------------------------- */
 const $=id=>document.getElementById(id);
-const OVS=['ovMenu','ovLevels','ovHow','ovPause','ovDone','ovRank'];
+const OVS=['ovMenu','ovLevels','ovHow','ovPause','ovDone','ovRank','ovAd'];
 function showOv(id){ OVS.forEach(o=>$(o).classList.toggle('on',o===id)); }
 function fmt(t){ return t.toFixed(2); }
 function syncHud(){
@@ -3943,7 +4143,11 @@ function skipLevel(){
 }
 function nextLevel(){
   if(G.state!=='done') return;
-  if(!nextLevel._shown){                    /* one break per transition, then through */
+  /* the sheet is finished and nothing else is on screen yet: the only moment
+     a full-screen break is allowed, and only once the play clock has run past
+     the gap. Under the gap you simply get the next sheet. Builder test runs
+     never count — that loop is a workflow, not a session. */
+  if(!nextLevel._shown && G.lvl!==-1 && ADS.due()){
     nextLevel._shown=true;
     ADS.break(()=>nextLevel());
     return;
@@ -3980,7 +4184,13 @@ function showDone(isBest){
 }
 const OPEN=new Set();
 function buildPicker(){
+  refreshBuildBtn();
   const p=$('picker'); p.innerHTML='';
+  if(REMIX){
+    const x=document.createElement('div'); x.className='acthead extra';
+    x.innerHTML='<em>REMIX</em><i></i><span>pick a sheet to open in the builder</span>';
+    p.appendChild(x);
+  }
   const ACTSTART={1:0,2:40,3:80,4:104,5:128,6:152,7:153,8:233,9:313,10:393,11:473,12:0};
   const ACTNAME={1:'the basics',2:'revision b',3:'revision c',4:'revision d',5:'recovery',6:'authored'};
   const ROMAN={1:'I',2:'II',3:'III',4:'IV',5:'V',6:'VI'};
@@ -4015,26 +4225,41 @@ function buildPicker(){
     const reachable=idx.some(a=>a[1]+1<=SAVE.unlocked);
     const sec=document.createElement('div'); sec.className='world';
     const head=document.createElement('button');
-    head.className='worldbtn'+(open?' open':'')+(reachable?'':' lock');
+    /* in remix mode a set opens once, for a video — the sheets themselves
+       are still there to play for nothing, this only buys taking them apart */
+    const rlock=REMIX && !SAVE.unl.wr[wi];
+    head.className='worldbtn'+(open&&!rlock?' open':'')+(reachable?'':' lock');
     head.disabled=!reachable;
-    head.innerHTML='<b>'+(open?'−':'+')+'</b><em>'+w.code+'</em>'+
-                   '<i></i><span>'+done+' / '+idx.length+'</span>';
-    head.onclick=()=>{ open?OPEN.delete(wi):OPEN.add(wi); buildPicker(); };
+    head.innerHTML='<b>'+(rlock?'\u25b8':(open?'\u2212':'+'))+'</b><em>'+w.code+'</em>'+
+                   '<i></i><span>'+(rlock?'unlock to remix':done+' / '+idx.length)+'</span>';
+    head.onclick=()=>{
+      if(rlock){
+        askAd('optional unlock', 'Open '+w.code+' for remixing?',
+          'Every sheet in this set you have already cleared, loaded into the builder to take apart.',
+          ()=>{ SAVE.unl.wr[wi]=1; OPEN.add(wi); save(); },
+          ()=>{ buildPicker(); showOv('ovLevels'); });
+        return;
+      }
+      open?OPEN.delete(wi):OPEN.add(wi); buildPicker();
+    };
     sec.appendChild(head);
-    if(open){
+    if(open && !rlock){
       const cards=document.createElement('div'); cards.className='cards';
       idx.forEach(([L,i])=>{
-        const lock=i+1>SAVE.unlocked;
+        /* remixing a sheet means having beaten it, not merely reached it */
+        const lock=REMIX ? (SAVE.best[i]===undefined && !SAVE.skipped[i]) : (i+1>SAVE.unlocked);
         const b=document.createElement('button');
         b.className='card'+(lock?' lock':'')+(i===G.lvl?' cur':'');
         b.disabled=lock;
-        const best=SAVE.best[i], parts=SAVE.parts[i]||0, tot=partsIn(i), skip=SAVE.skipped[i];
+        const rawBest=+SAVE.best[i], best=isFinite(rawBest)?rawBest:undefined;
+        const parts=Math.max(0,Math.min(99,Math.floor(+SAVE.parts[i])||0));
+        const tot=partsIn(i), skip=!!SAVE.skipped[i];
         b.innerHTML='<span class="n">'+String(i+1).padStart(3,'0')+'</span>'+
-          '<span class="t">'+(lock?'Locked':L.name)+'</span>'+
+          '<span class="t">'+(lock?(REMIX?'Not cleared':'Locked'):L.name)+'</span>'+
           '<span class="m">'+(best!==undefined?'<span class="done">'+fmt(best)+'s</span>'
               :(skip?'<span>skipped</span>':'<span>—</span>'))+
           '<span class="parts">'+parts+'/'+tot+'</span></span>';
-        if(!lock) b.onclick=()=>play(i);
+        if(!lock) b.onclick=()=> REMIX?remixPick(i):play(i);
         cards.appendChild(b);
       });
       sec.appendChild(cards);
@@ -4042,21 +4267,259 @@ function buildPicker(){
     p.appendChild(sec);
   });
 }
-function buildUnlocked(){ return SAVE.dev || SAVE.unlocked>=LEVELS.length; }
+/* The builder used to open only after all 600 sheets, which on a build with
+   no dev code meant it never opened at all. Ten sheets is enough to have met
+   the pieces you are about to paint with. One number, easy to move. */
+const BUILD_AT=10;
+function buildUnlocked(){ return SAVE.dev || SAVE.unlocked>=BUILD_AT; }
+
+/* ------------------------- optional unlocks --------------------------
+   Every one of these is an extra, never a step in the game: the builder
+   draws, tests, saves, compiles and loads sheets in full without watching
+   anything, and Skip is a convenience on top of a sheet you can also just
+   play. The prompt is always the player's own click, it always says what
+   it costs, and when there is no SDK to ask — the artifact, Pages, or an
+   ad blocker — ADS.rewarded reports success and the unlock simply happens.
+   -------------------------------------------------------------------- */
+let ADQ=null;
+function askAd(kind, text, sub, grant, done){
+  /* the build panel sits above the overlay layer in the embed, so it steps
+     out of the way for the prompt and the video, then comes back */
+  const bp=$('buildPanel').classList.contains('on');
+  if(bp) $('buildPanel').classList.remove('on');
+  ADQ={grant, done, bp};
+  $('adKind').textContent=kind;
+  $('adText').textContent=text;
+  $('adSub').textContent=sub||'';
+  $('adGo').textContent = window.PokiSDK ? 'Watch a video' : 'Unlock';
+  showOv('ovAd');
+}
+$('adGo').onclick=()=>{
+  const q=ADQ; if(!q) return; ADQ=null; showOv(null);
+  ADS.rewarded(ok=>{
+    if(q.bp) $('buildPanel').classList.add('on');
+    if(ok) q.grant();
+    if(q.done) q.done(ok);
+    if(!ok){
+      bMsg('no video available just now — nothing was spent, try again in a moment', true);
+      if(!q.bp){                       /* asked from the sheet list: say so there */
+        ADQ=q;
+        $('adSub').textContent='No video was available just now. Nothing was spent — try again in a moment.';
+        showOv('ovAd');
+      }
+    }
+  });
+};
+$('adNo').onclick=()=>{
+  const q=ADQ; if(!q) return; ADQ=null; showOv(null);
+  if(q.bp) $('buildPanel').classList.add('on');
+  if(q.done) q.done(false);
+};
+
+let REMIX=false;
 function openBuild(){
   if(!ED.grid) ED.grid=blankGrid(ED.cols);
-  G.state='edit'; G.cam=0; showOv(null); $('buildPanel').classList.add('on'); paintPalette();
+  REMIX=false;
+  G.state='edit'; G.cam=0; showOv(null); $('buildPanel').classList.add('on');
+  paintPalette(); paintThemes();
+}
+function paintThemes(){
+  const p=$('bThemes'); p.innerHTML='';
+  BTHEMES.forEach(t=>{
+    const own=themeOwned(t.k);
+    const b=document.createElement('button');
+    b.className='tiny'+(ED.theme===t.k?' on':'')+(own?'':' lk');
+    b.textContent=own?t.n:t.n+' \u25b8';
+    b.title=t.s+(own?'':' — optional unlock');
+    b.onclick=()=>{
+      if(own){ ED.theme=t.k; paintThemes(); bMsg(t.n+' — '+t.s); return; }
+      askAd('optional unlock', 'Unlock the '+t.n+' theme?', t.s+'. Yours for good once it opens.',
+        ()=>{ SAVE.unl.th[t.k]=1; ED.theme=t.k; save(); },
+        ok=>{ paintThemes(); if(ok) bMsg(t.n+' unlocked — '+t.s); });
+    };
+    p.appendChild(b);
+  });
+}
+function remixPick(i){
+  const d=gridFromLevel(i);
+  if(!d) return;
+  ED.grid=d.g; ED.cols=d.cols;
+  openBuild();
+  bMsg('remixing '+String(i+1).padStart(3,'0')+' · '+LEVELS[i].name+
+       ' — movers and saws did not come across');
+}
+
+/* ------------------------- palette swatches --------------------------
+   Each tile drawn the way the sheet itself draws it, so the palette shows
+   the thing you are about to place rather than the letter that stood for
+   it. Every tile is drawn isolated — all four edges exposed — which is
+   what a single click puts down. Powder is the one deliberate departure:
+   in play it is indistinguishable from snow, and that is the trap, but an
+   author has to be able to tell them apart, so it carries a hazard mark.
+   -------------------------------------------------------------------- */
+function swatchDraw(g, ch){
+  const T=TS;
+  const dsh=on=>g.setLineDash(on?[3,3]:[]);
+  g.clearRect(0,0,T,T);
+  g.fillStyle=C.ink; g.fillRect(0,0,T,T);
+  g.lineWidth=1; dsh(false);
+  g.strokeStyle='#1D2C3C'; g.strokeRect(.5,.5,T-1,T-1);
+  if(ch==='#'||ch==='I'){
+    const ice=ch==='I';
+    g.fillStyle=ice?'#132630':C.fill; g.fillRect(0,0,T,T);
+    g.strokeStyle=ice?'rgba(76,201,232,.85)':C.line; g.strokeRect(.5,.5,T-1,T-1);
+    if(ice){ g.strokeStyle='rgba(76,201,232,.45)'; g.beginPath();
+      g.moveTo(4,7); g.lineTo(11,7); g.moveTo(14,7); g.lineTo(19,7); g.stroke(); }
+  }
+  else if(ch==='S'){
+    g.fillStyle='#1B2A38'; g.fillRect(0,0,T,T);
+    g.strokeStyle='rgba(94,143,181,.55)'; g.strokeRect(.5,.5,T-1,T-1);
+    g.strokeStyle='rgba(198,216,230,.18)'; g.beginPath();
+    g.moveTo(5.5,0); g.lineTo(5.5,T); g.moveTo(15.5,0); g.lineTo(15.5,T); g.stroke();
+  }
+  else if(ch==='n'||ch==='w'){
+    const crest=i=>6+Math.sin(i/5)*1.5;
+    g.fillStyle='#26333F'; g.fillRect(0,0,T,T);
+    g.fillStyle='#E4EEF6'; g.beginPath(); g.moveTo(0,crest(0));
+    for(let i=2;i<=T;i+=2) g.lineTo(i,crest(i));
+    g.lineTo(T,T); g.lineTo(0,T); g.closePath(); g.fill();
+    g.strokeStyle='rgba(255,255,255,.85)'; g.beginPath(); g.moveTo(0,crest(0));
+    for(let i=2;i<=T;i+=2) g.lineTo(i,crest(i));
+    g.stroke();
+    if(ch==='w'){
+      g.strokeStyle=C.haz; g.lineWidth=1.2; dsh(true); g.strokeRect(2.5,2.5,T-5,T-5); dsh(false);
+      g.beginPath(); g.moveTo(T/2,10); g.lineTo(T/2,18);
+      g.moveTo(T/2-3.5,14.5); g.lineTo(T/2,18); g.lineTo(T/2+3.5,14.5); g.stroke();
+    }
+  }
+  else if(ch==='='){
+    g.strokeStyle=C.line; g.lineWidth=2; g.beginPath(); g.moveTo(1,4); g.lineTo(T-1,4); g.stroke();
+    g.strokeStyle=C.dim; g.lineWidth=1; g.beginPath();
+    g.moveTo(5,5); g.lineTo(5,10); g.moveTo(T-5,5); g.lineTo(T-5,10); g.stroke();
+  }
+  else if(ch==='~'){
+    g.fillStyle='rgba(76,201,232,.07)'; g.fillRect(2,2,T-4,T-4);
+    g.strokeStyle='rgba(76,201,232,.75)'; dsh(true); g.strokeRect(2.5,2.5,T-5,T-5); dsh(false);
+    g.fillStyle='rgba(76,201,232,.8)';
+    [[3,3],[T-3,3],[3,T-3],[T-3,T-3]].forEach(q=>g.fillRect(q[0]-1,q[1]-1,2,2));
+  }
+  else if(ch==='^'||ch==='v'){
+    g.fillStyle='rgba(255,59,87,.16)'; g.strokeStyle=C.haz; g.lineWidth=1.2;
+    g.beginPath();
+    if(ch==='^') for(let i=0;i<2;i++){ const b=i*12; g.moveTo(b+1,T); g.lineTo(b+6,7); g.lineTo(b+11,T); }
+    else        for(let i=0;i<2;i++){ const b=i*12; g.moveTo(b+1,0); g.lineTo(b+6,T-7); g.lineTo(b+11,0); }
+    g.closePath(); g.fill(); g.stroke();
+  }
+  else if(ch==='B'){
+    g.fillStyle=C.fill; g.fillRect(0,10,T,T-10);
+    g.strokeStyle=C.cyan; g.lineWidth=1.6; g.beginPath(); g.moveTo(1,11); g.lineTo(T-1,11); g.stroke();
+    g.lineWidth=1.4; g.beginPath();
+    for(let i=0;i<2;i++){ const yy=10-i*5; g.moveTo(5,yy); g.lineTo(T/2,yy-4); g.lineTo(T-5,yy); }
+    g.stroke();
+  }
+  else if(ch==='W'){
+    g.strokeStyle='rgba(76,201,232,.22)'; dsh(true); g.strokeRect(.5,.5,T-1,T-1); dsh(false);
+    g.strokeStyle='rgba(76,201,232,.55)'; g.lineWidth=1.2; g.beginPath();
+    for(let i=0;i<2;i++){ const yy=11+i*9; g.moveTo(5,yy); g.lineTo(T/2,yy-5); g.lineTo(T-5,yy); }
+    g.stroke();
+  }
+  else if(ch==='G'){
+    g.fillStyle='rgba(167,139,250,.13)'; g.fillRect(0,0,T,T);
+    g.strokeStyle=C.mirror; g.lineWidth=1.2; g.strokeRect(.5,.5,T-1,T-1);
+    dsh(true); g.beginPath(); g.moveTo(2,T/2+.5); g.lineTo(T-2,T/2+.5); g.stroke(); dsh(false);
+    g.fillStyle=C.mirror;
+    g.beginPath(); g.moveTo(T/2,4); g.lineTo(T/2+4,9); g.lineTo(T/2-4,9); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(T/2,T-4); g.lineTo(T/2+4,T-9); g.lineTo(T/2-4,T-9); g.closePath(); g.fill();
+  }
+  else if(ch==='T'){
+    g.fillStyle='rgba(94,143,181,.14)'; g.fillRect(0,0,T,T);
+    g.strokeStyle=C.line; g.strokeRect(.5,.5,T-1,T-1);
+  }
+  else if(ch==='t'){
+    g.strokeStyle='rgba(94,143,181,.45)'; dsh(true); g.strokeRect(3.5,3.5,T-7,T-7); dsh(false);
+  }
+  else if(ch==='D'){
+    g.fillStyle='rgba(255,201,77,.12)'; g.fillRect(0,0,T,T);
+    g.strokeStyle=C.amber; g.beginPath();
+    for(let i=1;i<4;i++){ g.moveTo(i*6+.5,2); g.lineTo(i*6+.5,T-2); }
+    g.stroke(); g.strokeRect(.5,.5,T-1,T-1);
+  }
+  else if(ch==='K'){
+    g.strokeStyle=C.amber; g.lineWidth=1.5;
+    g.beginPath(); g.arc(T/2,T/2-3,4,0,6.2832); g.stroke();
+    g.beginPath(); g.moveTo(T/2,T/2+1); g.lineTo(T/2,T/2+8);
+    g.moveTo(T/2,T/2+5); g.lineTo(T/2+4,T/2+5); g.stroke();
+  }
+  else if(ch==='o'){
+    const r=6.5; g.save(); g.translate(T/2,T/2);
+    g.strokeStyle=C.amber; g.fillStyle='rgba(255,201,77,.18)'; g.lineWidth=1.4;
+    g.beginPath(); g.moveTo(0,-r); g.lineTo(r,0); g.lineTo(0,r); g.lineTo(-r,0); g.closePath();
+    g.fill(); g.stroke();
+    g.fillStyle=C.amber; g.fillRect(-1,-1,2,2); g.restore();
+  }
+  else if(ch==='C'){
+    const bx=T/2-4, by=T/2+6;
+    g.strokeStyle=C.datum; g.lineWidth=1.2;
+    g.beginPath(); g.moveTo(bx+.5,by); g.lineTo(bx+.5,by-16); g.stroke();
+    g.beginPath(); g.moveTo(bx+1,by-16); g.lineTo(bx+10,by-12.5); g.lineTo(bx+1,by-9); g.closePath();
+    g.fillStyle='rgba(63,220,160,.35)'; g.fill(); g.stroke();
+    g.fillStyle=C.datum; g.fillRect(bx-2.5,by-1,6,2);
+  }
+  else if(ch==='p'||ch==='q'){
+    const col = ch==='p'?C.mirror:'#4CC9E8';
+    g.save(); g.translate(T/2,T/2);
+    g.strokeStyle=col; g.lineWidth=1.4;
+    for(let k=0;k<3;k++){ g.beginPath(); g.ellipse(0,0,10-k*3,6-k*2,k*1.05,0,6.2832); g.stroke(); }
+    g.restore();
+    g.fillStyle=col; g.fillRect(T/2-1.5,T/2-1.5,3,3);
+  }
+  else if(ch==='P'){
+    const w=PW*0.85, h=PH*0.85, px=T/2-w/2, py=T/2-h/2;
+    g.fillStyle=C.accent; g.fillRect(px,py,w,h);
+    g.fillStyle='rgba(10,15,22,.55)'; g.fillRect(px+2,py+2,w-4,h-4);
+    g.strokeStyle='#FFD9C0'; g.lineWidth=1; g.beginPath();
+    g.moveTo(T/2-3,T/2+.5); g.lineTo(T/2+3,T/2+.5);
+    g.moveTo(T/2+.5,T/2-3); g.lineTo(T/2+.5,T/2+3); g.stroke();
+  }
+  else if(ch==='X'){
+    g.save(); g.translate(T/2,T/2);
+    g.strokeStyle=C.datum; g.lineWidth=1.3;
+    dsh(true); g.beginPath(); g.arc(0,0,10,0,6.2832); g.stroke(); dsh(false);
+    g.globalAlpha=.55; g.beginPath(); g.arc(0,0,7,0,6.2832); g.stroke(); g.globalAlpha=1;
+    g.beginPath(); g.moveTo(-6,0); g.lineTo(6,0); g.moveTo(0,-6); g.lineTo(0,6); g.stroke();
+    g.fillStyle=C.datum; g.fillRect(-1.5,-1.5,3,3); g.restore();
+  }
+  else if(ch==='.'){
+    g.strokeStyle='rgba(94,143,181,.5)'; g.lineWidth=1.2; g.beginPath();
+    g.moveTo(8,8); g.lineTo(T-8,T-8); g.moveTo(T-8,8); g.lineTo(8,T-8); g.stroke();
+  }
+}
+function swatchCanvas(ch, S){
+  const c=document.createElement('canvas');
+  const dpr=Math.min(2, window.devicePixelRatio||1);
+  c.width=S*dpr; c.height=S*dpr; c.style.width=S+'px'; c.style.height=S+'px';
+  const g=c.getContext('2d');
+  if(g && g.setTransform) g.setTransform(S*dpr/TS,0,0,S*dpr/TS,0,0);
+  if(g) swatchDraw(g,ch);
+  return c;
 }
 function paintPalette(){
   const p=$('palette'); p.innerHTML='';
-  PALETTE.forEach(([ch,label])=>{
+  PALETTE.forEach(([ch,name,desc])=>{
     const b=document.createElement('button');
-    b.className='tiny'+(ED.tool===ch?' on':''); b.textContent=(ch==='.'?'⌫':ch);
-    b.title=label; b.onclick=()=>{ ED.tool=ch; paintPalette(); };
+    b.className=(ED.tool===ch?'on':'');
+    b.title=name+' \u2014 '+desc;
+    b.appendChild(swatchCanvas(ch,26));
+    const n=document.createElement('span'); n.className='pn'; n.textContent=name;
+    b.appendChild(n);
+    b.onclick=()=>{ ED.tool=ch; paintPalette(); };
     p.appendChild(b);
   });
+  const cur=PALETTE.find(e=>e[0]===ED.tool)||PALETTE[0];
+  $('bDesc').textContent=cur[1]+' \u2014 '+cur[2];
   $('bCols').textContent=ED.cols;
   [1,2,3].forEach(i=>$('bSlot'+i).classList.toggle('on', ED.slot===i));
+  $('bRemix').textContent = REMIX ? 'Picking a sheet…' : 'Open an official sheet';
 }
 function bMsg(t,bad){ const e=$('bMsg'); e.textContent=t; e.classList.toggle('bad',!!bad);
   clearTimeout(bMsg._t); bMsg._t=setTimeout(()=>{e.textContent='';},3000); }
@@ -4076,27 +4539,41 @@ function resizeGrid(nc){
 $('btnBuild').onclick=openBuild;
 $('bExit').onclick=()=>{ $('buildPanel').classList.remove('on'); G.state='menu'; showOv('ovMenu'); };
 $('bWide-').onclick=()=>{ if(ED.cols>32) resizeGrid(ED.cols-16); };
-$('bWide+').onclick=()=>{ if(ED.cols<192) resizeGrid(ED.cols+16); };
+$('bWide+').onclick=()=>{ if(ED.cols<1088) resizeGrid(ED.cols+16); };
+$('bRemix').onclick=()=>{
+  REMIX=true; $('buildPanel').classList.remove('on');
+  G.state='menu'; buildPicker(); showOv('ovLevels');
+};
 [1,2,3].forEach(i=>$('bSlot'+i).onclick=()=>{ ED.slot=i; paintPalette(); });
 $('bSave').onclick=()=>{ SAVE.builds=SAVE.builds||{};
-  SAVE.builds[ED.slot]=encodeGrid(ED.grid,ED.cols); save(); bMsg('saved to slot '+ED.slot); };
+  SAVE.builds[ED.slot]=encodeGrid(ED.grid,ED.cols,ED.theme); save(); bMsg('saved to slot '+ED.slot); };
 $('bLoad').onclick=()=>{ const c=(SAVE.builds||{})[ED.slot];
   if(!c) return bMsg('slot '+ED.slot+' is empty', true);
   const d=decodeGrid(c); if(!d) return bMsg('slot '+ED.slot+' is corrupt', true);
-  ED.grid=d.g; ED.cols=d.cols; paintPalette(); bMsg('loaded slot '+ED.slot); };
+  ED.grid=d.g; ED.cols=d.cols; takeTheme(d.theme); paintPalette(); bMsg('loaded slot '+ED.slot); };
 $('bClear').onclick=()=>{ ED.grid=blankGrid(ED.cols); bMsg('cleared'); };
-$('bCompile').onclick=()=>{ const c=encodeGrid(ED.grid,ED.cols);
+$('bCompile').onclick=()=>{ const c=encodeGrid(ED.grid,ED.cols,ED.theme);
   $('bCode').value=c; $('bCode').select(); bMsg('code ready — '+c.length+' characters, copy it'); };
 $('bPaste').onclick=()=>{ const d=decodeGrid($('bCode').value);
   if(!d) return bMsg('that code is not valid', true);
-  ED.grid=d.g; ED.cols=d.cols; paintPalette(); bMsg('loaded a sheet of '+d.cols+' columns'); };
+  ED.grid=d.g; ED.cols=d.cols; paintPalette();
+  const got=takeTheme(d.theme);
+  bMsg('loaded a sheet of '+d.cols+' columns'+
+       (got? '' : ' — it was drawn for the '+bTheme(d.theme).n+' theme, which you have not unlocked'),
+       !got); };
+/* a code names the theme it was drawn for; take it only if it is yours */
+function takeTheme(k){
+  if(!k || !BTHEMES.some(t=>t.k===k)){ ED.theme='blueprint'; paintThemes(); return true; }
+  if(!themeOwned(k)){ ED.theme='blueprint'; paintThemes(); return false; }
+  ED.theme=k; paintThemes(); return true;
+}
 $('bTest').onclick=()=>{ $('buildPanel').classList.remove('on'); G.state='play'; showOv(null); loadCustom(ED.grid,ED.cols); ac(); };
 cv.addEventListener('pointerdown',e=>{ if(G.state!=='edit') return; ED.painting=true; edPaint(e); });
 cv.addEventListener('pointermove',e=>{ if(G.state==='edit'&&ED.painting) edPaint(e); });
 addEventListener('pointerup',()=>{ ED.painting=false; });
 $('btnPlay').onclick=()=>play(Math.min(SAVE.unlocked-1,LEVELS.length-1));
 $('btnLevels').onclick=()=>{ buildPicker(); showOv('ovLevels'); };
-$('btnBack').onclick=()=>showOv('ovMenu');
+$('btnBack').onclick=()=>{ if(REMIX){ openBuild(); return; } showOv('ovMenu'); };
 $('btnHow').onclick=()=>showOv('ovHow');
 $('btnTest').onclick=startTest;
 $('btnDaily').onclick=playDaily;
@@ -4112,7 +4589,7 @@ $('btnSkip').onclick=()=>{
   ADS.rewarded(ok=>{ if(ok) skipLevel(); else flash('SKIP UNAVAILABLE'); });
 };
 $('btnRetry2').onclick=()=>{ G.state='play'; showOv(null); const d=G.deaths+1; loadLevel(G.lvl); G.deaths=d; syncHud(); };
-$('btnQuit').onclick=()=>{ TEST.on=false; $('btnGiveUp').classList.add('hidden'); G.state='menu'; buildPicker(); showOv('ovLevels'); };
+$('btnQuit').onclick=()=>{ REMIX=false; TEST.on=false; $('btnGiveUp').classList.add('hidden'); G.state='menu'; buildPicker(); showOv('ovLevels'); };
 $('btnRetry').onclick=()=>{ G.state='play'; showOv(null);
   if(G.lvl===-2) playDaily(); else if(G.lvl<0) loadCustom(ED.grid,ED.cols); else loadLevel(G.lvl); };
 $('btnNext').onclick=nextLevel;
@@ -4143,28 +4620,38 @@ function codeMsg(txt, bad){
   codeMsg._t=setTimeout(()=>{ el.textContent=''; }, 2600);
 }
 function tryCode(){
-  if(!DEVCODE){ codeMsg('not available in this build', true); return; }
-  const el=$('devCode'), v=(el.value||'').trim().toUpperCase();
+  const el=$('devCode');
+  if(!DEVCODE || !el){ codeMsg('not available in this build', true); return; }
+  const v=(el.value||'').trim().toUpperCase();
   if(!v) return;
   if(v===DEVCODE){
     SAVE.unlocked=LEVELS.length; SAVE.dev=1; save();
     el.value=''; el.blur();
     buildPicker(); setDevTag();
-    if(!DEVCODE){ const cb=document.querySelector('.codebox'); if(cb) cb.style.display='none'; }
-$('sheetCount').textContent=LEVELS.length+' sheets · 5 acts';
+    $('sheetCount').textContent=LEVELS.length+' sheets · 5 acts';
     codeMsg('developer mode · all '+LEVELS.length+' sheets unlocked', false);
   }else{
     codeMsg('code rejected', true);
     el.select();
   }
 }
-$('btnCode').onclick=tryCode;
-$('devCode').addEventListener('keydown',e=>{
+/* the rev-code box exists in the artifact build only — tools/build.js and
+   tools/build-poki.js cut the markup out entirely, so these may be absent */
+if($('btnCode')) $('btnCode').onclick=tryCode;
+if($('devCode')) $('devCode').addEventListener('keydown',e=>{
   e.stopPropagation();
   if(e.key==='Enter'){ e.preventDefault(); tryCode(); }
 });
 setDevTag();
-$('btnWipe').onclick=()=>{ SAVE={unlocked:1,best:{},parts:{},skipped:{},cuts:{},rank:0,daily:null,ghosts:{},dev:0,mute:SAVE.mute}; save(); buildPicker(); setDevTag(); };
+$('btnWipe').onclick=()=>{
+  /* themes and remix sets were paid for with a video, so they are kept:
+     they are entitlements, not progress. Without carrying SAVE.unl across,
+     the next call into the builder walks off the end of an undefined. */
+  SAVE={unlocked:1,best:{},parts:{},skipped:{},cuts:{},rank:0,daily:null,ghosts:{},
+        dev:0,mute:SAVE.mute,unl:SAVE.unl};
+  SAVE.unl=SAVE.unl||{}; SAVE.unl.th=SAVE.unl.th||{}; SAVE.unl.wr=SAVE.unl.wr||{};
+  save(); buildPicker(); setDevTag();
+};
 $('sheetCount').textContent=(SAVE.unlocked>40?LEVELS.length+' sheets · 5 acts':'40 sheets · 5 constraints');
 $('btnPlay').textContent = SAVE.unlocked>1 ? 'Continue' : 'Start';
 
@@ -4200,6 +4687,7 @@ function loop(ts){
   const live = (G.state==='play');
   if(live!==ADS.playing){ live ? ADS.playStart() : ADS.playStop(); }
   const dt=Math.min(60,ts-last); last=ts; acc+=dt;
+  if(live) ADS.tick(dt);
   let n=0;
   while(acc>=16.6667 && n++<4){ step(); acc-=16.6667; }
   if(G.state==='play') { $('hudTime').textContent=fmt(G.time); }
@@ -4207,6 +4695,7 @@ function loop(ts){
 }
 loadLevel(Math.min(SAVE.unlocked-1,LEVELS.length-1));
 G.state='menu'; buildPicker();
-ADS.init().then(()=>{ ADS.loaded(); });
+ADS.init().then(()=>{ ADS.loaded();
+  if(window.PokiSDK) $('btnSkip').textContent='Skip sheet \u25b8 watch a video'; });
 requestAnimationFrame(loop);
 </script>

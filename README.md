@@ -1,7 +1,8 @@
 # CONSTRAINT
 
-A precision platformer rendered as a CAD sketch. 153 sheets across six acts, in a single
-self-contained HTML file with no dependencies, no build step and no external assets.
+A precision platformer rendered as a CAD sketch. 600 sheets — six acts and six extra worlds —
+in a single self-contained HTML file with no dependencies and no external assets. The GitHub Pages
+build makes no third-party requests at all.
 
 **Play:** https://fanaustinca.github.io/constraint/
 
@@ -60,11 +61,13 @@ node tools/extract.js   # game.html -> build/game.js (for the test harness)
 
 The game itself is one file, `game.html`.
 
-- **Segments.** Levels are composed from 34 hand-authored 16×18 tile segments (`CHUNKS`).
+- **Segments.** Levels are composed from 66 hand-authored 16×18 tile segments (`CHUNKS`).
   Each keeps its outer two columns clear with solid ground beneath, so any segment can follow
   any other and the seam is always walkable. A sheet is just a list of segment ids.
-- **Worlds** carry modifiers: `render` (flat / extrude / glitch / drawn), `eat` (cursor speed),
-  `drift`, `phase`, `chaos`, `nodatum`, `allparts`, and per-sheet `sup` (suppressed abilities).
+- **Worlds** (41 of them) carry modifiers: `render` (flat / extrude / glitch / drawn / code /
+  light), `eat` (cursor speed), `drift`, `phase`, `chaos`, `nodatum`, `allparts`, `sparse`,
+  `gravity`, `accel`, `weather`, `winter`, `cold`, `livedraw`, and per-sheet `sup`
+  (suppressed abilities).
 - **Physics** is fixed-timestep at 60Hz with substepped AABB collision, coyote time, jump
   buffering and variable jump height. Tuning constants are grouped near the top of the script.
 
@@ -78,7 +81,8 @@ gated behind a 39-second deadline that could not be met.
 ```bash
 node tools/extract.js       # game.html -> build/game.js
 cd tools
-node solvability.js         # bot-plays all 153 sheets, reports any it cannot finish
+node solvability.js         # bot-plays all 600 sheets, reports any it cannot finish
+node solvability.js 0 60    # or just a range
 node bounds.js              # asserts the player never leaves the sheet
 ```
 
@@ -88,15 +92,20 @@ which is exactly how the harmless-saw bug survived for as long as it did.
 
 ## Build mode
 
-Finish all 153 sheets (or enter the dev code) and a **Build** button appears on the menu.
-Paint a sheet from the full block palette, size it 32–192 columns, keep three save slots,
-and test-play it in place.
+Clear ten sheets and a **Build** button appears on the menu (`BUILD_AT` in `game.html`).
+Paint a sheet from a 23-tile palette — each swatch is drawn the way the sheet itself draws
+that tile, with its name and its rule underneath — size it 32–1088 columns, keep three save
+slots, and test-play it in place.
 
-**Compile** turns the sheet into a share code — `CS1.<cols>.<run-length data>`, a few dozen
-characters for a typical sheet. Hand it to someone else, they paste it into their copy and
-press **Paste code**, and they have your level. No tile character is a digit, so run lengths
-parse unambiguously; decoding validates the column count and total tile count and refuses
-anything malformed.
+**Remix** opens an official sheet's geometry in the editor to take apart. **Themes** re-skin
+your sheet with a world's rules: Blueprint and Cursor are free, and Space, Code, Whiteout,
+Winter and Chaos are optional unlocks. The editor is fully usable without unlocking anything.
+
+**Compile** turns the sheet into a share code — `CS2.<cols>.<theme>.<run-length data>`, a few
+dozen characters for a typical sheet. Hand it to someone else, they paste it into their copy
+and press **Load code**, and they have your level. Codes are treated as hostile input: length
+is capped, every run length is checked against the grid size *before* it is expanded, and every
+character has to be one you could actually have painted. Older `CS1` codes still load.
 
 ## Daily and ghosts
 
@@ -112,3 +121,28 @@ are kept. Trials never record one — the ranking test is meant to be met cold.
 
 Arrows or WASD to move · Space/W/Up to jump (hold for height) · Shift/X to dash ·
 Down to drop through thin platforms · R restart · Esc pause · M mute
+
+On a touch device the on-screen pad appears automatically and the sheet fills the screen.
+
+## Builds
+
+Three targets come out of the one source:
+
+```bash
+node tools/build.js       # game.html -> index.html      (GitHub Pages)
+node tools/build-poki.js  # game.html -> poki/index.html (Poki submission)
+```
+
+`index.html` is the Pages build: document shell added, dev code stripped, zero external
+requests. `poki/index.html` adds Poki's SDK and a full-screen embed layout, and is the only
+build that loads anything from another origin. Ads are wired so nothing is ever gated on
+them — with an ad blocker, or off Poki entirely, every call falls through and the game plays
+in full. A full-screen break is only ever requested at the moment a sheet is finished and only
+after six minutes of actual play; Skip and the optional builder unlocks are opt-in rewarded
+videos that grant their reward regardless.
+
+## Saves
+
+Everything is local, in one `localStorage` key, and nothing is sent anywhere. What comes back
+out of it is treated as untrusted: own keys only (so a `__proto__` key cannot re-point the
+object), and every field coerced to the shape the game expects or dropped.

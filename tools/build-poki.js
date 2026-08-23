@@ -6,7 +6,9 @@ const src=fs.readFileSync(path.join(root,'game.html'),'utf8');
 const title=(src.match(/<title>([\s\S]*?)<\/title>/)||[,'CONSTRAINT'])[1];
 /* the dev unlock is for the artifact build only */
 const body=src.replace(/<title>[\s\S]*?<\/title>\s*/,'')
-               .replace(/const DEVCODE='[^']*';/, "const DEVCODE=null;");
+               .replace(/const DEVCODE='[^']*';/, "const DEVCODE=null;")
+               /* and the rev-code box comes out of the markup, not just hidden */
+               .replace(/\s*<span class="codebox">[\s\S]*?<\/span>/, '');
 const out=`<!doctype html>
 <html lang="en">
 <head>
