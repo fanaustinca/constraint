@@ -181,16 +181,21 @@ button.tiny{padding:5px 10px; font-size:10px; letter-spacing:.1em}
 .touch{position:absolute; inset:0; display:none; z-index:4; pointer-events:none}
 .touch.on{display:block}
 .touch b{
-  position:absolute; bottom:3%; width:14%; padding-bottom:14%;
-  border:1px solid var(--line-dim); background:color-mix(in srgb,var(--panel) 60%, transparent);
+  position:absolute; width:15%; padding-bottom:15%; bottom:4%;
+  border:1.5px solid rgba(94,143,181,.55);
+  background:rgba(20,31,43,.42);
   border-radius:50%; pointer-events:auto; touch-action:none;
-  color:var(--text-dim); font:600 11px/1 var(--mono); letter-spacing:.1em;
+  color:var(--text); font:700 13px/1 var(--mono); letter-spacing:.06em;
   display:flex; align-items:center; justify-content:center;
+  -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;
 }
 .touch b span{position:absolute}
-.touch b.act{border-color:var(--accent); color:var(--accent)}
-.touch .l{left:3%} .touch .r{left:19%}
-.touch .a{right:3%} .touch .bb{right:19%} .touch .cc{right:35%}
+.touch b.act{border-color:var(--accent); color:var(--accent); background:rgba(255,122,47,.22)}
+.touch .l{left:3.5%}
+.touch .r{left:21%}
+.touch .a{right:3.5%; bottom:5%; width:19%; padding-bottom:19%; font-size:14px}
+.touch .bb{right:25%; bottom:5%}
+.touch .cc{right:25%; bottom:27%; width:13%; padding-bottom:13%; font-size:11px}
 .buildpanel{
   display:none; flex-direction:column; gap:8px;
   background:var(--panel); border:1px solid var(--gridmaj); padding:10px;
@@ -226,6 +231,35 @@ button.tiny{padding:5px 10px; font-size:10px; letter-spacing:.1em}
 }
 .codemsg.bad{color:var(--hazard)}
 .hidden{display:none !important}
+/* portal embed: the sheet fills the screen, chrome collapses onto it */
+body.embed{padding:0; overflow:hidden; touch-action:none; overscroll-behavior:none; height:100%}
+body.embed .app{height:100vh; height:100dvh; max-width:none; gap:0}
+body.embed .bar{
+  position:absolute; z-index:6; top:0; left:0; right:0;
+  border:0; background:linear-gradient(180deg, rgba(10,15,22,.82), rgba(10,15,22,0));
+  padding:6px 10px; font-size:10px;
+}
+body.embed .cmd{display:none}
+body.embed .sheet{
+  flex:1; border:0; padding:0; min-height:0;
+  display:flex; align-items:center; justify-content:center; background:var(--ink);
+}
+body.embed .sheet::before,body.embed .sheet::after{display:none}
+body.embed .stage{
+  width:100%; height:100%;
+  max-width:calc(100dvh * 16 / 9); max-height:calc(100vw * 9 / 16);
+  margin:auto;
+}
+body.embed .buildpanel{
+  position:absolute; z-index:7; left:0; right:0; bottom:0;
+  max-height:56%; overflow:auto;
+}
+@media (max-width:560px){
+  body.embed .bar .field:nth-child(n+6){display:none}
+  .ov h1{letter-spacing:.18em; text-indent:.18em}
+  .ov p{font-size:11px}
+  button{padding:8px 14px}
+}
 @media (prefers-reduced-motion:reduce){*{animation:none !important}}
 </style>
 
@@ -1609,6 +1643,42 @@ const SFX={
   spring:()=>snd(420,900,0.14,0.09,'triangle'),
 };
 
+/* --------------------------- host bridge -----------------------------
+   Poki's SDK when it is there, no-ops when it is not.  The artifact and
+   Pages builds load no external script at all, and an ad blocker on Poki
+   just means these all fall through — the game never gates on them.
+   -------------------------------------------------------------------- */
+const ADS={
+  ready:false, playing:false,
+  init(){
+    if(!window.PokiSDK) return Promise.resolve();
+    return PokiSDK.init().then(()=>{ ADS.ready=true; }).catch(()=>{});
+  },
+  loaded(){ try{ window.PokiSDK && PokiSDK.gameLoadingFinished(); }catch(e){} },
+  playStart(){ if(ADS.playing) return; ADS.playing=true;
+    try{ window.PokiSDK && PokiSDK.gameplayStart(); }catch(e){} },
+  playStop(){ if(!ADS.playing) return; ADS.playing=false;
+    try{ window.PokiSDK && PokiSDK.gameplayStop(); }catch(e){} },
+  break(then){
+    if(!window.PokiSDK){ then(); return; }
+    const wasOn=A.on;
+    try{
+      PokiSDK.commercialBreak(()=>{ A.on=false; })
+        .then(()=>{ A.on=wasOn; then(); })
+        .catch(()=>{ A.on=wasOn; then(); });
+    }catch(e){ A.on=wasOn; then(); }
+  },
+  rewarded(then){
+    if(!window.PokiSDK){ then(true); return; }
+    const wasOn=A.on;
+    try{
+      PokiSDK.rewardedBreak({size:'medium', onStart:()=>{ A.on=false; }})
+        .then(ok=>{ A.on=wasOn; then(!!ok); })
+        .catch(()=>{ A.on=wasOn; then(false); });
+    }catch(e){ A.on=wasOn; then(false); }
+  }
+};
+
 /* ------------------------------ save -------------------------------- */
 const SKEY='constraint.save.v1';
 let SAVE={unlocked:1, best:{}, parts:{}, skipped:{}, cuts:{}, rank:0, daily:null, ghosts:{}, dev:0, mute:false};
@@ -2455,7 +2525,7 @@ function updateFx(){
 function win(){
   if(G.won) return;
   G.won=1; G.state='done'; SFX.win(); G.shake=6;
-  saveGhost();
+  ADS.playStop(); saveGhost();
   if(TEST.on){ endTrial(false); return; }
   for(let i=0;i<30;i++){ const a=Math.random()*6.28,s=1+Math.random()*4;
     G.fx.push({x:G.exit.x,y:G.exit.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:40,c:'#3FDCA0',sz:2}); }
@@ -3859,11 +3929,11 @@ function syncHud(){
   $('hudDeaths').textContent=G.deaths;
 }
 function play(i){
-  G.state='play'; loadLevel(i); showOv(null); ac();
+  G.state='play'; loadLevel(i); showOv(null); ac(); ADS.playStart();
 }
 function togglePause(){
-  if(G.state==='play'){ G.state='pause'; showOv('ovPause'); }
-  else if(G.state==='pause'){ G.state='play'; showOv(null); }
+  if(G.state==='play'){ G.state='pause'; ADS.playStop(); showOv('ovPause'); }
+  else if(G.state==='pause'){ G.state='play'; showOv(null); ADS.playStart(); }
 }
 function skipLevel(){
   SAVE.skipped[G.lvl]=1;
@@ -3874,6 +3944,12 @@ function skipLevel(){
 }
 function nextLevel(){
   if(G.state!=='done') return;
+  if(!nextLevel._shown){                    /* one break per transition, then through */
+    nextLevel._shown=true;
+    ADS.break(()=>nextLevel());
+    return;
+  }
+  nextLevel._shown=false;
   if(G.lvl===-2){ G.state='menu'; showOv('ovMenu'); return; }
   if(G.lvl<0){ openBuild(); return; }
   const gate={39:1, 79:2, 103:3, 127:4, 151:5, 152:6}[G.lvl];
@@ -4032,7 +4108,10 @@ $('btnGiveUp').onclick=()=>{ if(TEST.on) endTrial(true); };
 setRankTag();
 $('btnHowBack').onclick=()=>showOv('ovMenu');
 $('btnResume').onclick=togglePause;
-$('btnSkip').onclick=()=>{ if(G.state==='pause') skipLevel(); };
+$('btnSkip').onclick=()=>{
+  if(G.state!=='pause') return;
+  ADS.rewarded(ok=>{ if(ok) skipLevel(); else flash('SKIP UNAVAILABLE'); });
+};
 $('btnRetry2').onclick=()=>{ G.state='play'; showOv(null); const d=G.deaths+1; loadLevel(G.lvl); G.deaths=d; syncHud(); };
 $('btnQuit').onclick=()=>{ TEST.on=false; $('btnGiveUp').classList.add('hidden'); G.state='menu'; buildPicker(); showOv('ovLevels'); };
 $('btnRetry').onclick=()=>{ G.state='play'; showOv(null);
@@ -4097,7 +4176,8 @@ cv.addEventListener('pointerdown',()=>{
   else if(G.cutScene!==6 && G.lvl+1<LEVELS.length) play(G.lvl+1);
   else { G.state='menu'; buildPicker(); showOv('ovMenu'); }
 });
-if(matchMedia('(pointer: coarse)').matches){
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+if(matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window)){
   $('touch').classList.add('on');
   const bs=$('touch').querySelectorAll('b');
   const acts=['l','r','inv','dash','jump'];
@@ -4122,6 +4202,7 @@ function loop(ts){
 }
 loadLevel(Math.min(SAVE.unlocked-1,LEVELS.length-1));
 G.state='menu'; buildPicker();
+ADS.init().then(()=>{ ADS.loaded(); });
 requestAnimationFrame(loop);
 </script>
 
