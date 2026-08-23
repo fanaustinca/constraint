@@ -195,6 +195,9 @@ Ad handling follows Poki's lifecycle rules rather than any schedule of our own:
   an eight second timeout so a blocked SDK cannot strand anyone.
 - **Frozen during a break.** Audio off, simulation halted, keyboard and pointer ignored, the
   whole page click-locked, `gameplayStop()` first.
+- **Every reward is asked for first.** No video ever starts off a bare click: Skip and both
+  optional unlocks raise a prompt that names what you get and says plainly that a short video
+  ad plays first. Declining costs nothing and returns you where you were.
 - **Rewards need a real view.** In the Poki build an incomplete or blocked ad grants nothing.
   In the standalone builds there is no ad economy, so the optional unlocks are simply given.
 - **A hidden tab is not gameplay** — `visibilitychange` closes the session and pauses.

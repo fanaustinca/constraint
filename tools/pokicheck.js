@@ -137,6 +137,24 @@ setTimeout(()=>{
        'gameplayStop precedes the break');
   }
 
+  /* ---- every reward is asked for before it is taken ---- */
+  console.log('\nno video starts without a prompt first');
+  const rb=()=>calls.filter(c=>c==='rewardedBreak').length;
+  const prompted=(open,label)=>{
+    const before=rb();
+    run("ADQ=null; showOv(null)");
+    run(open);
+    const up=run("document.getElementById('ovAd').classList.contains('on')");
+    ok(up && rb()===before, label);
+    const sub=run("document.getElementById('adSub').textContent");
+    ok(!isPoki || /video/i.test(sub), '  ...and it says a video will play');
+    run("ADQ=null; showOv(null)");
+  };
+  prompted("G.state='pause'; G.lvl=5; document.getElementById('btnSkip').onclick()",
+           'Skip asks first');
+  prompted("REMIX=true; SAVE.unl.wr={}; buildPicker(); askAd('optional unlock','Open X for remixing?','',()=>{},()=>{})",
+           'a remix unlock asks first');
+
   /* ---- frozen and deaf while a break is up ---- */
   console.log('\nwhile a break is on screen');
   run("ADS.lock(true)");
