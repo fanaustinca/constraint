@@ -590,9 +590,9 @@ icehang:{t:["################","................","................","..........
 
 /* --- set pieces -------------------------------------------------- */
 springpit:{t:["################","................","................","................",
-              ".......o........",".....######.....","................","................",
+              "................","................","..........o.....","........######..",
               "................","................","................","................",
-              "................","................","..^^^^^B^^^^^^..","################",
+              "................","................","..^^BBB^^^^^^^..","################",
               "################","################"]},
 
 needle:{t:["################","................","................","................",
@@ -670,9 +670,9 @@ nook:{t:["################","................","................",".............
          "################","################"]},
 
 vault:{t:["################","................","................","................",
-          "................","................","........o.......","................",
+          "................","................","................","........o.......",
           "......SSSS......","......SSSS......","......SSSS......","......SSSS......",
-          "......SSSS......","......SSSS......","..BB..SSSS......","################",
+          "......SSSS......","......SSSS......","..BBB.SSSS......","################",
           "################","################"]},
 
 teethrun:{t:["################","................","................","................",
@@ -803,14 +803,14 @@ pit:{t:["################","................","................","..............
 
 climb:{t:["################","................","................","................",
           "................","................","................","................",
-          "................","..........o.....","........#####...","................",
-          "....#####.......","................","................","################",
+          "................","..........o.....","................","........#####...",
+          "................","....#####.......","................","################",
           "################","################"]},
 
 thin:{t:["################","................","................","................",
          "................","................","................","................",
-         "................","...........o....","..........====..","................",
-         ".....====.......","................","................","################",
+         "................","...........o....","................","..........====..",
+         "................",".....====.......","................","################",
          "################","################"]},
 
 chamf:{t:["################","................","................","................",
@@ -2330,7 +2330,8 @@ function step(){
 
     P.vy+=GRAV*P.g*(G.gscale||1);
     const mf=MAXFALL*Math.max(0.62,G.gscale||1);
-    if(P.vy>mf) P.vy=mf; if(P.vy<-mf) P.vy=-mf;
+    if(P.vy*P.g > mf) P.vy=mf*P.g;      /* terminal velocity is for FALLING — clamping the
+                                           other way was capping springs at two thirds power */
   }
 
   /* powdered snow — indistinguishable until you are in it */
@@ -2533,7 +2534,7 @@ function updateFx(){
 function win(){
   if(G.won) return;
   G.won=1; G.state='done'; SFX.win(); G.shake=6;
-  ADS.playStop(); saveGhost();
+  saveGhost();
   if(TEST.on){ endTrial(false); return; }
   for(let i=0;i<30;i++){ const a=Math.random()*6.28,s=1+Math.random()*4;
     G.fx.push({x:G.exit.x,y:G.exit.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:40,c:'#3FDCA0',sz:2}); }
@@ -3937,11 +3938,11 @@ function syncHud(){
   $('hudDeaths').textContent=G.deaths;
 }
 function play(i){
-  G.state='play'; loadLevel(i); showOv(null); ac(); ADS.playStart();
+  G.state='play'; loadLevel(i); showOv(null); ac();
 }
 function togglePause(){
-  if(G.state==='play'){ G.state='pause'; ADS.playStop(); showOv('ovPause'); }
-  else if(G.state==='pause'){ G.state='play'; showOv(null); ADS.playStart(); }
+  if(G.state==='play'){ G.state='pause'; showOv('ovPause'); }
+  else if(G.state==='pause'){ G.state='play'; showOv(null); }
 }
 function skipLevel(){
   SAVE.skipped[G.lvl]=1;
@@ -4126,7 +4127,7 @@ $('btnRetry').onclick=()=>{ G.state='play'; showOv(null);
   if(G.lvl===-2) playDaily(); else if(G.lvl<0) loadCustom(ED.grid,ED.cols); else loadLevel(G.lvl); };
 $('btnNext').onclick=nextLevel;
 $('btnList').onclick=()=>{ G.state='menu'; buildPicker(); showOv('ovLevels'); };
-const DEVCODE='AF010114';
+const DEVCODE=null;
 function refreshBuildBtn(){ $('btnBuild').classList.toggle('hidden', !buildUnlocked()); }
 function setDevTag(){
   $('devTag').classList.toggle('hidden', !SAVE.dev);
@@ -4152,13 +4153,15 @@ function codeMsg(txt, bad){
   codeMsg._t=setTimeout(()=>{ el.textContent=''; }, 2600);
 }
 function tryCode(){
+  if(!DEVCODE){ codeMsg('not available in this build', true); return; }
   const el=$('devCode'), v=(el.value||'').trim().toUpperCase();
   if(!v) return;
   if(v===DEVCODE){
     SAVE.unlocked=LEVELS.length; SAVE.dev=1; save();
     el.value=''; el.blur();
     buildPicker(); setDevTag();
-    $('sheetCount').textContent=LEVELS.length+' sheets · 5 acts';
+    if(!DEVCODE){ const cb=document.querySelector('.codebox'); if(cb) cb.style.display='none'; }
+$('sheetCount').textContent=LEVELS.length+' sheets · 5 acts';
     codeMsg('developer mode · all '+LEVELS.length+' sheets unlocked', false);
   }else{
     codeMsg('code rejected', true);
@@ -4202,6 +4205,10 @@ if(matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window)){
 let acc=0,last=performance.now();
 function loop(ts){
   requestAnimationFrame(loop);
+  /* gameplayStart / gameplayStop follow G.state and nothing else, so every
+     route in and out of play is covered exactly once and never twice */
+  const live = (G.state==='play');
+  if(live!==ADS.playing){ live ? ADS.playStart() : ADS.playStop(); }
   const dt=Math.min(60,ts-last); last=ts; acc+=dt;
   let n=0;
   while(acc>=16.6667 && n++<4){ step(); acc-=16.6667; }

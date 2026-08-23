@@ -4,7 +4,9 @@ const fs=require('fs'), path=require('path');
 const root=path.join(__dirname,'..');
 const src=fs.readFileSync(path.join(root,'game.html'),'utf8');
 const title=(src.match(/<title>([\s\S]*?)<\/title>/)||[,'CONSTRAINT'])[1];
-const body=src.replace(/<title>[\s\S]*?<\/title>\s*/,'');
+/* the dev unlock is for the artifact build only */
+const body=src.replace(/<title>[\s\S]*?<\/title>\s*/,'')
+               .replace(/const DEVCODE='[^']*';/, "const DEVCODE=null;");
 const out=`<!doctype html>
 <html lang="en">
 <head>
