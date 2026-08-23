@@ -562,6 +562,33 @@ function phaseIntros(){
   ok('intros','trials');
 }
 
+/* ================= phase: hud ================= */
+function phaseHud(){
+  head('hud — nothing advertises a move you do not have');
+  let bad=0;
+  const pad=()=>run("document.getElementById('padDash').classList.contains('hidden')");
+  const key=()=>run("document.getElementById('cmdDash').classList.contains('hidden')");
+  const N=run('LEVELS.length');
+  for(let i=0;i<N;i++){
+    const can=run(`(()=>{ loadLevel(${i}); return !!G.ab.dash; })()`);
+    if(pad()===can){ if(++bad<5) bug('hud','sheet '+(i+1)+': dash is '+(can?'available':'not available')+
+                                       ' but the touch button is '+(can?'hidden':'shown')); }
+    if(key()===can){ if(++bad<5) bug('hud','sheet '+(i+1)+': the key list disagrees with the ability'); }
+    ok('hud','sheet '+(i+1));
+  }
+  /* and through the real entry points, not just loadLevel */
+  run('SAVE.unlocked=LEVELS.length; TEST.on=false;');
+  for(const [what,code,want] of [
+      ['sheet 1',        'play(0)',   true],
+      ['sheet 33',       'play(32)',  false],
+      ['the daily',      'playDaily()', false],
+      ['a builder sheet','(()=>{ED.grid=blankGrid(64);ED.cols=64;loadCustom(ED.grid,64)})()', false]]){
+    run(code); if(run("G.state")==='intro') run('closeIntro()');
+    if(pad()!==want) bug('hud','via '+what+': the touch dash button is '+(pad()?'hidden':'shown')+', expected '+(want?'hidden':'shown'));
+    ok('hud',what);
+  }
+}
+
 /* ================= phase: respawn ================= */
 function phaseRespawn(){
   head('respawn — no start and no datum may kill you while you stand still');
@@ -675,7 +702,7 @@ const PHASES={load:phaseLoad, fuzz:phaseFuzz, ui:phaseUi, codes:phaseCodes,
               ghosts:phaseGhosts, daily:phaseDaily, ranking:phaseRanking,
               save:phaseSave, builder:phaseBuilder, cuts:phaseCuts,
               marathon:phaseMarathon, spawnsafe:phaseSpawnsafe, portals:phasePortals,
-              respawn:phaseRespawn, intros:phaseIntros};
+              respawn:phaseRespawn, intros:phaseIntros, hud:phaseHud};
 console.log('stress — seed '+SEED+(DEEP?' (deep)':'')+(TARGET?' against '+TARGET:''));
 const list = ONLY? [ONLY] : Object.keys(PHASES);
 for(const p of list){
