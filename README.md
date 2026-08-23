@@ -125,7 +125,9 @@ which is exactly how the harmless-saw bug survived for as long as it did.
 A **Build** button sits on the menu from the start (`BUILD_AT` in `game.html`).
 Paint a sheet from a 26-tile palette — each swatch is drawn the way the sheet itself draws
 that tile, with its name and its rule underneath — size it 32–1088 columns, keep three save
-slots, and test-play it in place. Pausing a sheet you built offers **Back to the builder**
+slots, and test-play it in place. A **View** row pans the camera — hold ◀ ▶ to scroll, click
+to jump a screen, or go straight to Start or End — because arrow keys are no use on a phone
+and the on-screen pads sit underneath the panel. Pausing a sheet you built offers **Back to the builder**
 rather than the sheet list.
 
 Three of the palette entries are not tiles but objects with a path: **Platform ↕** and

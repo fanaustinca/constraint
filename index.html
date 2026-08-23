@@ -306,9 +306,20 @@ body.embed .stage{
 }
 body.embed .buildpanel{
   position:absolute; z-index:7; left:0; right:0; bottom:0;
-  max-height:56%; overflow:auto;
+  max-height:58%; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y;
+}
+/* a short landscape phone has almost no height to give: let the panel take more
+   of it, and shrink the swatches so the palette costs fewer rows */
+@media (max-height:560px){
+  body.embed .buildpanel{max-height:72%; padding:7px; gap:6px}
+  .buildui{gap:6px}
 }
 @media (max-width:560px){
+  /* 54px swatches wrap to five rows on a narrow phone and push the controls
+     under the fold; at 44px the whole palette costs two rows fewer */
+  #palette button{width:44px; font-size:7px; padding:4px 1px 3px}
+  #palette canvas{width:21px; height:21px}
+  .buildpanel{padding:8px}
   body.embed .bar .field:nth-child(n+6){display:none}
   .ov h1{letter-spacing:.18em; text-indent:.18em}
   .ov p{font-size:11px}
@@ -484,6 +495,15 @@ body.embed .buildpanel{
         <span class="blabel">Remix</span>
         <button class="tiny" id="bRemix">Open an official sheet</button>
         <span class="bhint">Loads its geometry in to take apart. Moving platforms and saws are not carried across.</span>
+      </div>
+      <div class="brow">
+        <span class="blabel">View</span>
+        <button class="tiny" id="bPanL" aria-label="Pan left">&#9664;</button>
+        <button class="tiny" id="bPanR" aria-label="Pan right">&#9654;</button>
+        <button class="tiny" id="bPanS">Start</button>
+        <button class="tiny" id="bPanE">End</button>
+        <span class="bval" id="bPanPos">1</span>
+        <span class="bhint">Hold to pan. Arrow keys work too.</span>
       </div>
       <div class="brow">
         <span class="blabel">Width</span>
@@ -1744,13 +1764,36 @@ const SFX={
 const POKI_BUILD=false;                 /* tools/build-poki.js flips this */
 const ADS={
   ready:false, playing:false, announced:false, inAd:false,
+  absent:false, failed:false,
   init(){
-    if(!window.PokiSDK) return Promise.resolve();
-    /* never hang the game on the SDK — if init does not settle, start anyway */
-    return Promise.race([
-      PokiSDK.init().then(()=>{ ADS.ready=true; }).catch(()=>{}),
-      new Promise(r=>setTimeout(r, 8000))
-    ]);
+    /* The SDK is a separate script from Poki's CDN and there is no promise it
+       has run by the time this line does — a slow CDN, a sandboxed preview or a
+       copy injected around the game can all land after us. Looking once and
+       giving up was the difference between a game with ads and a game Poki
+       cannot see at all: no init, so no gameLoadingFinished, no gameplay
+       events, and every rewarded video quietly unavailable. Wait for it. */
+    const appear=new Promise(r=>{
+      let n=0;
+      (function look(){
+        if(window.PokiSDK) return r(true);
+        if(++n>60) return r(false);                          /* ~3s, then give up */
+        setTimeout(look,50);
+      })();
+    });
+    return appear.then(found=>{
+      if(!found){
+        ADS.absent=true;
+        if(POKI_BUILD) try{ console.warn('CONSTRAINT: PokiSDK never appeared — '+
+          'no ads, no SDK events. Is poki-sdk.js reachable from this page?'); }catch(e){}
+        return;
+      }
+      /* never hang the game on the SDK — if init does not settle, start anyway */
+      return Promise.race([
+        PokiSDK.init().then(()=>{ ADS.ready=true; })
+                      .catch(()=>{ ADS.failed=true; }),
+        new Promise(r=>setTimeout(r, 8000))
+      ]);
+    });
   },
   loaded(){
     ADS.announced=true;
@@ -2620,8 +2663,12 @@ function tri(u){ const m=((u%2)+2)%2; return m<1? m : 2-m; }
 function step(){
   G.tick++;
   if(G.state==='edit'){
-    const sp=(IN.r?7:0)-(IN.l?7:0);
-    G.cam=Math.max(0,Math.min(ED.cols*TS-VW, G.cam+sp));
+    /* the on-screen pads sit at the bottom of the stage, which in the embed is
+       exactly where the build panel is pinned — they are unreachable there and
+       absent altogether on a mouse, so the panel carries its own pan buttons */
+    const sp=(IN.r?7:0)-(IN.l?7:0)+(ED.pan||0)*9;
+    G.cam=Math.max(0,Math.min(Math.max(0,ED.cols*TS-VW), G.cam+sp));
+    const pp=$('bPanPos'); if(pp) pp.textContent=String(Math.round(G.cam/TS)+1);
     return;
   }
   if(G.msgT>0) G.msgT--;
@@ -5162,6 +5209,22 @@ $('btnSkip').onclick=()=>{
 $('btnRetry2').onclick=()=>{ G.state='play'; showOv(null); const d=G.deaths+1; reloadSheet(); G.deaths=d; syncHud(); };
 $('btnQuit').onclick=()=>{ REMIX=false; TEST.on=false; $('btnGiveUp').classList.add('hidden'); G.state='menu'; buildPicker(); showOv('ovLevels'); };
 $('btnToBuild').onclick=()=>{ if(G.lvl===-1) openBuild(); };
+/* press and hold to pan; a plain click nudges one screen */
+(()=>{
+  const edge=()=>Math.max(0,ED.cols*TS-VW);
+  const hold=(id,dir)=>{
+    const b=$(id); if(!b) return;
+    let held=false;
+    b.addEventListener('pointerdown',e=>{ e.preventDefault(); held=true; ED.pan=dir; });
+    const off=()=>{ if(!held) return; held=false; ED.pan=0; };
+    ['pointerup','pointercancel','pointerleave'].forEach(t=>b.addEventListener(t,off));
+    b.onclick=()=>{ if(ED.pan) return;
+      G.cam=Math.max(0,Math.min(edge(), G.cam+dir*VW*0.75)); };
+  };
+  hold('bPanL',-1); hold('bPanR',1);
+  $('bPanS').onclick=()=>{ ED.pan=0; G.cam=0; };
+  $('bPanE').onclick=()=>{ ED.pan=0; G.cam=edge(); };
+})();
 $('btnRetry').onclick=()=>{ G.state='play'; showOv(null); reloadSheet(); };
 $('btnNext').onclick=nextLevel;
 $('btnList').onclick=()=>{ G.state='menu'; buildPicker(); showOv('ovLevels'); };

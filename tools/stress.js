@@ -189,7 +189,8 @@ function phaseUi(){
   const ids=['btnPlay','btnLevels','btnHow','btnTest','btnDaily','btnBuild','btnBack','btnHowBack',
     'btnResume','btnRetry2','btnSkip','btnQuit','btnToBuild','btnGiveUp','btnNext','btnRetry','btnList',
     'btnRankAgain','btnRankDone','btnWipe','bExit','bTest','bCompile','bPaste','bSave','bLoad',
-    'bClear','bRemix','bWide-','bWide+','bSlot1','bSlot2','bSlot3','adGo','adNo'];
+    'bClear','bRemix','bWide-','bWide+','bSlot1','bSlot2','bSlot3','adGo','adNo',
+    'bPanL','bPanR','bPanS','bPanE'];
   run("G.state='menu'");
   const n=DEEP?4000:1500;
   for(let i=0;i<n;i++){
