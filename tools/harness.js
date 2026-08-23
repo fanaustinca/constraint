@@ -3,11 +3,18 @@ const path=require('path');
 const src=fs.readFileSync(path.join(__dirname,'..','build','game.js'),'utf8');
 
 const noop=()=>{};
+/* Nothing here rasterises, but counting the calls that would put ink on the
+   canvas is enough to answer "does this thing draw at all" — which is how a
+   tile can be placeable, saveable and playable while being invisible. */
+const INK=new Set(['fillRect','strokeRect','stroke','fill','fillText','drawImage',
+                   'ellipse','arc','moveTo','lineTo','arcTo','bezierCurveTo']);
+const paint={n:0, on:false};
 const ctxProxy=new Proxy({},{get:(t,k)=>{
   if(k==='canvas') return {width:0,height:0};
   if(k==='roundRect') return undefined;
   if(k==='createPattern') return ()=>({});
   if(k==='setTransform') return noop;
+  if(INK.has(k)) return ()=>{ if(paint.on) paint.n++; };
   return t[k]!==undefined?t[k]:noop;
 }, set:()=>true});
 /* getElementById hands back the same object for the same id, the way a browser
@@ -49,4 +56,6 @@ sandbox.window.AudioContext=function(){ throw new Error('no audio'); };
 sandbox.globalThis=sandbox;
 vm.createContext(sandbox);
 vm.runInContext(src,sandbox,{filename:'game.js'});
-module.exports={sandbox, run:(code)=>vm.runInContext(code,sandbox)};
+/* ink(fn) -> how many drawing calls fn made */
+function ink(fn){ paint.on=true; paint.n=0; try{ fn(); } finally{ paint.on=false; } return paint.n; }
+module.exports={sandbox, run:(code)=>vm.runInContext(code,sandbox), ink};

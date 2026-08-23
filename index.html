@@ -411,6 +411,7 @@ body.embed .buildpanel{
           <button class="primary" id="btnResume">Resume</button>
           <button class="free" id="btnRetry2">Restart sheet</button>
           <button id="btnSkip">Skip sheet</button>
+          <button class="hidden" id="btnToBuild">Back to the builder</button>
           <button id="btnQuit">Sheet list</button>
           <button class="tiny hidden" id="btnGiveUp">End trial here</button>
         </div>
@@ -584,11 +585,11 @@ const WORLDS = [
   { act:9, code:"SYNTAX", name:"Syntax", hint:"The sheet is its own source.",
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'code'} },
   { act:9, code:"COMPILE", name:"Compile", hint:"The sheet is its own source.",
-    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'code', phase:96} },
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'code', phase:96, drift:1} },
   { act:9, code:"RUNTIME", name:"Runtime", hint:"The sheet is its own source.",
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'code', eat:1.1} },
   { act:9, code:"DEPLOY", name:"Deploy", hint:"The sheet is its own source.",
-    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'code', sparse:true} },
+    ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'code', sparse:true, drift:1.4} },
   { act:10, code:"DAWN", name:"Dawn", hint:"A white sheet. Everything reads inverted.",
     ab:{dj:true, wall:true, inv:true, dash:true}, mod:{render:'light'} },
   { act:10, code:"GLARE", name:"Glare", hint:"A white sheet. Everything reads inverted.",
@@ -1964,18 +1965,31 @@ function partsIn(i){
 }
 function buildPieces(){
   /* a "piece" is a run of tiles plus whatever is stacked directly under it,
-     so deleting a stretch of floor leaves a real hole rather than a scratch */
+     so deleting a stretch of floor leaves a real hole rather than a scratch.
+     Anything drawn on the sheet counts: spikes, thin platforms, updraft,
+     mirror pads and both phase blocks included. Asking isSolid() here only
+     ever caught what happened to be solid at load, which spared every hazard
+     outright and — because the phase timer starts on A — left every ghost
+     block standing while its twin was erased out from under it. */
+  const drawn=(x,y)=> y>=0 && y<ROWS && x>=0 && x<COLS && G.grid[y][x]!=='.';
+  /* A piece claims its rectangle so the sweep can tell "already spoken for"
+     from "top of a stack". The stack walk only ever descends column x, so under
+     an overhang the deeper columns of a run came out orphaned — drawn, never
+     claimed, and never eaten because the tile above them was drawn too. */
+  const claimed=[];
+  for(let y=0;y<ROWS;y++) claimed.push(new Uint8Array(COLS));
   G.pieces=[];
   for(let y=0;y<ROWS;y++){
     let x=0;
     while(x<COLS){
+      if(!drawn(x,y) || claimed[y][x]){ x++; continue; }
       const ch=G.grid[y][x];
-      if(ch==='.'||!isSolid(x,y)){ x++; continue; }
-      if(y>0 && isSolid(x,y-1)){ x++; continue; }      // only the top of a stack
       let x2=x;
-      while(x2+1<COLS && G.grid[y][x2+1]===ch && (y===0||!isSolid(x2+1,y-1)) && (x2-x+1)<6) x2++;
+      while(x2+1<COLS && G.grid[y][x2+1]===ch && !claimed[y][x2+1]
+            && !drawn(x2+1,y-1) && (x2-x+1)<6) x2++;
       let y2=y;
-      while(y2+1<ROWS && isSolid(x,y2+1)) y2++;
+      while(y2+1<ROWS && drawn(x,y2+1) && !claimed[y2+1][x]) y2++;
+      for(let yy=y;yy<=y2;yy++) for(let xx=x;xx<=x2;xx++) claimed[yy][xx]=1;
       G.pieces.push({x, y, y2, len:x2-x+1, gone:0});
       x=x2+1;
     }
@@ -2074,6 +2088,48 @@ function winterize(pow){
         if(powder && cy+1<ROWS && G.grid[cy+1][cx]==='#') G.grid[cy+1][cx]='w';
         break;
       }
+    }
+  }
+}
+/* M, H and u are drawn into the grid like any other tile, but a platform is not
+   a tile — it is an object with a path. Lift each horizontal run out and give it
+   somewhere to go: as far as the clear space around it allows, so a platform
+   boxed in on both sides quietly becomes the ledge it looks like. */
+function liftPlatforms(){
+  const MARKS='MHu';
+  const openAt=(cx,cy)=> cy>=0 && cy<ROWS && cx>=0 && cx<COLS &&
+                         (G.grid[cy][cx]==='.' || MARKS.indexOf(G.grid[cy][cx])>=0);
+  for(let y=0;y<ROWS;y++){
+    let x=0;
+    while(x<COLS){
+      const mark=G.grid[y][x];
+      if(MARKS.indexOf(mark)<0){ x++; continue; }
+      let x2=x;
+      while(x2+1<COLS && G.grid[y][x2+1]===mark && (x2-x+1)<8) x2++;
+      const len=x2-x+1;
+      const clearRun=(cy,cx0,cx1)=>{ for(let c=cx0;c<=cx1;c++) if(!openAt(c,cy)) return false; return true; };
+      let up=0, down=0, left=0, right=0;
+      while(up<4   && clearRun(y-up-1, x, x2)) up++;
+      while(down<4 && clearRun(y+down+1, x, x2)) down++;
+      while(left<5  && openAt(x-left-1,  y)) left++;
+      while(right<5 && openAt(x2+right+1, y)) right++;
+      let d=0, vert=true;
+      if(mark==='M'){ d=Math.min(up,down); }
+      else if(mark==='H'){ d=Math.min(left,right); vert=false; }
+      if(mark!=='u' && d<1){                 /* nowhere to travel: it is just a ledge */
+        for(let c=x;c<=x2;c++) G.grid[y][c]='#';
+        x=x2+1; continue;
+      }
+      const px=x*TS, py=y*TS, ph=((x*7+y*3)%10)/10;
+      const m = mark==='u'
+        ? {ax:px, ay:py-8, bx:px, by:py+8, w:len*TS, h:TS, spd:0.5*TS/60,
+           ph, u:ph*2, x:px, y:py, dx:0, dy:0, loose:1}
+        : {ax: vert?px:px-d*TS, ay: vert?py-d*TS:py,
+           bx: vert?px:px+d*TS, by: vert?py+d*TS:py,
+           w:len*TS, h:TS, spd:2.0*TS/60, ph, u:ph*2, x:px, y:py, dx:0, dy:0};
+      G.movers.push(m);
+      for(let c=x;c<=x2;c++) G.grid[y][c]='.';
+      x=x2+1;
     }
   }
 }
@@ -2195,7 +2251,7 @@ function featuresHere(MOD){
   if(G.saws.length) f.push('saw');
   if(G.movers.length) f.push('mover');
   if(G.eatOn) f.push('cursor');
-  if(MOD.drift) f.push('drift');
+  if(MOD.drift || G.movers.some(m=>m.loose)) f.push('drift');   /* including ones drawn by hand */
   if(MOD.chaos) f.push('chaos');
   if((MOD.gravity||1)<0.9) f.push('lowg');
   if(MOD.cold) f.push('cold');
@@ -2359,26 +2415,35 @@ function moverRect(m){ return {x:m.x,y:m.y,w:m.w,h:m.h}; }
 function overlap(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
 
 function moveXStep(dx){
-  P.x+=dx; if(dx===0) return;
+  P.x+=dx;
   const y0=Math.floor(P.y/TS), y1=Math.floor((P.y+PH-1)/TS);
   P.wall=0;
   if(dx>0){
     const cx=Math.floor((P.x+PW-1)/TS);
     for(let cy=y0;cy<=y1;cy++) if(isSolid(cx,cy)){ P.x=cx*TS-PW-0.01; P.vx=0; P.wall=1; break; }
-  }else{
+  }else if(dx<0){
     const cx=Math.floor(P.x/TS);
     for(let cy=y0;cy<=y1;cy++) if(isSolid(cx,cy)){ P.x=(cx+1)*TS+0.01; P.vx=0; P.wall=-1; break; }
   }
+  /* Sideways ejection only when you are actually moving sideways. A vertical
+     platform that catches you belongs to moveY; letting the X pass claim it
+     first shunts you out from under the platform instead of onto it. */
+  if(dx===0) return;
   const pr={x:P.x,y:P.y,w:PW,h:PH};
   for(const m of G.movers){
-    if(!overlap(pr,m)) continue;
-    if(dx>0){ P.x=m.x-PW-0.01; P.wall=1; } else { P.x=m.x+m.w+0.01; P.wall=-1; }
+    if(m.gone || !overlap(pr,m)) continue;
+    const lf=m.x-PW-0.01, rt=m.x+m.w+0.01;
+    let side = dx>0 ? -1 : dx<0 ? 1
+             : ((P.x+PW)-m.x < (m.x+m.w)-P.x ? -1 : 1);   /* -1 leaves left, +1 leaves right */
+    const shut=s=> boxSolid(s<0?lf:rt, P.y);
+    if(shut(side)){ if(shut(-side)) continue; side=-side; }  /* an exit into rock is not an exit */
+    if(side<0){ P.x=lf; P.wall=1; } else { P.x=rt; P.wall=-1; }
     P.vx=0; pr.x=P.x;
   }
 }
 function moveYStep(dy){
   const prevB=P.y+PH, prevT=P.y;
-  P.y+=dy; if(dy===0) return;
+  P.y+=dy;
   const x0=Math.floor(P.x/TS), x1=Math.floor((P.x+PW-1)/TS);
   let hitTile=null, hitDir=0;
   if(dy>0){
@@ -2389,7 +2454,7 @@ function moveYStep(dy){
       if(!hit && ch==='=' && P.g>0 && !IN.d && prevB<=cy*TS+1.5) hit=true;
       if(hit){ P.y=cy*TS-PH-0.01; hitTile={cx,cy}; hitDir=1; break; }
     }
-  }else{
+  }else if(dy<0){
     const cy=Math.floor(P.y/TS);
     for(let cx=x0;cx<=x1;cx++){
       const ch=tileAt(cx,cy);
@@ -2401,16 +2466,23 @@ function moveYStep(dy){
   let rideHit=null;
   const pr={x:P.x,y:P.y,w:PW,h:PH};
   for(const m of G.movers){
-    if(!overlap(pr,m)) continue;
-    /* only land on it if you came from above, only bonk if you came from below —
-       otherwise the platform moved into you, so push out the nearest way */
-    if(dy>0 && prevB<=m.y+2){ P.y=m.y-PH-0.01; hitDir=1; rideHit=m; }
-    else if(dy<0 && prevT>=m.y+m.h-2){ P.y=m.y+m.h+0.01; hitDir=-1; }
-    else {
-      const up=(P.y+PH)-m.y, down=(m.y+m.h)-P.y;
-      if(up<down){ P.y=m.y-PH-0.01; if(dy>=0){ hitDir=1; rideHit=m; } }
-      else { P.y=m.y+m.h+0.01; if(dy<0) hitDir=-1; }
-    }
+    if(m.gone || !overlap(pr,m)) continue;
+    /* Only land on it if you came from above, only bonk if you came from below —
+       otherwise the platform moved into you and there is no side you came from,
+       so leave by the shorter route. Whichever route we pick it has to be open:
+       ejecting into solid rock buries you, unstick() shoves you back, and the
+       two of them walk you down through the floor a few pixels a frame. If the
+       side you came from is shut you are being crushed — hold still and clip
+       rather than get posted out the far face of the platform. */
+    const top=m.y-PH-0.01, bot=m.y+m.h+0.01;
+    let side, came=true;
+    if(dy>0 && prevB<=m.y+2) side=1;
+    else if(dy<0 && prevT>=m.y+m.h-2) side=-1;
+    else { side=((P.y+PH)-m.y < (m.y+m.h)-P.y) ? 1 : -1; came=false; }
+    const shut=s=> boxSolid(P.x, s>0?top:bot);
+    if(shut(side)){ if(came || shut(-side)){ pr.y=P.y; continue; } side=-side; }
+    if(side>0){ P.y=top; if(dy>=0){ hitDir=1; rideHit=m; } }
+    else { P.y=bot; if(dy<0) hitDir=-1; }
     pr.y=P.y;
   }
   if(hitDir){
@@ -2573,7 +2645,14 @@ function step(){
     }
     m.dx=nx-m.x; m.dy=ny-m.y; m.x=nx; m.y=ny;
   }
-  if(P.rideM){ P.x+=P.rideM.dx; P.y+=P.rideM.dy; }
+  /* A platform carrying you is still not allowed to push you inside the sheet.
+     Back out the axis that would, so a rising platform stops at a ceiling
+     instead of driving your head through it. */
+  if(P.rideM){
+    const rm=P.rideM, ox=P.x, oy=P.y;
+    P.x+=rm.dx; if(boxSolid(P.x,P.y)) P.x=ox;
+    P.y+=rm.dy; if(boxSolid(P.x,P.y)) P.y=oy;
+  }
   P.rideM=null;
 
   /* saws */
@@ -3614,8 +3693,27 @@ function drawExtrude(cam){
     }
   }
 }
+/* Every tile gets its own colour and its own run of glyphs. Falling through to
+   the generic green meant ice, thin platforms, updraft and doors all rendered as
+   plain solid blocks — you could not see what you were standing on. */
+const CODEGL={
+  '#':['#57D98A','01{}()[];=<>+-*/&|'],
+  'I':['#4CC9E8','\\//\\/'],                 /* nothing to grip */
+  'S':['#8FA8BC','::;:'],
+  'n':['#DCE9F2','....'],
+  'w':['#DCE9F2','....'],
+  '=':['rgba(87,217,138,.62)','--__--'],
+  '~':['#4CC9E8','+*+*'],
+  'B':['#4CC9E8','****'],
+  'W':['#4CC9E8','^^^^'],
+  'G':[null,'<><>'],
+  'D':['#FFC94D','[]{}'],
+  'T':[null,'0101'],
+  't':[null,'1010'],
+  'K':['#FFC94D','&&&&']
+};
 function drawCode(cam){
-  const gl='01{}()[];=<>+-*/&|!~^';
+  const gl=CODEGL['#'][1];
   const k0=Math.max(0,Math.floor(cam/TS)-1), k1=Math.min(COLS-1,Math.floor((cam+VW)/TS)+1);
   ctx.font='700 15px ui-monospace,monospace'; ctx.textAlign='center';
   for(let cy=0;cy<ROWS;cy++) for(let cx=k0;cx<=k1;cx++){
@@ -3626,15 +3724,15 @@ function drawCode(cam){
     if(ch==='~') gone=G.broken.has(cy*COLS+cx);          /* stepped on: it is not there */
     else if(ch==='T') faint=(G.phase!==0);
     else if(ch==='t') faint=(G.phase!==1);
+    else if(ch==='D') faint=G.doorOpen;
     if(gone) continue;
     ctx.globalAlpha=faint?0.22:1;
-    ctx.fillStyle = haz? C.haz
-      : (ch==='G'? C.mirror
-      : (ch==='~'? '#4CC9E8'
-      : ((ch==='n'||ch==='w')? '#DCE9F2'
-      : (ch==='S'? '#8FA8BC'
-      : (ch==='B'? '#4CC9E8' : '#57D98A')))));
-    ctx.fillText(haz?'!':gl[(cx*7+cy*13+ch.charCodeAt(0))%gl.length], cx*TS+TS/2, cy*TS+TS/2+5);
+    const e=CODEGL[ch];
+    ctx.fillStyle = haz ? C.haz
+      : (ch==='G'||ch==='T'||ch==='t') ? C.mirror
+      : (e ? e[0] : '#57D98A');
+    const set = haz ? null : (e ? e[1] : gl);
+    ctx.fillText(haz?'!':set[(cx*7+cy*13+ch.charCodeAt(0))%set.length], cx*TS+TS/2, cy*TS+TS/2+5);
     ctx.globalAlpha=1;
   }
   ctx.textAlign='left';
@@ -3665,6 +3763,17 @@ function drawMovers(){
     if(m.gone) continue;
     ctx.strokeStyle='rgba(94,143,181,.22)'; ctx.lineWidth=1; dash(true);
     ctx.beginPath(); ctx.moveTo(m.ax+m.w/2,m.ay+m.h/2); ctx.lineTo(m.bx+m.w/2,m.by+m.h/2); ctx.stroke(); dash(false);
+    if(G.rmode==='code'){
+      /* a platform is a span of source that happens to be moving */
+      const n=Math.max(2,Math.round(m.w/TS));
+      ctx.font='700 15px ui-monospace,monospace'; ctx.textAlign='center';
+      ctx.fillStyle=m.loose?'#FFC94D':'#57D98A';
+      for(let i=0;i<n;i++){
+        const g = i===0?'[' : i===n-1?']' : (m.loose?'~':'=');
+        ctx.fillText(g, m.x+(i+0.5)*(m.w/n), m.y+TS/2+5);
+      }
+      ctx.textAlign='left'; continue;
+    }
     if(G.rmode==='flat'){
       ctx.strokeStyle=m.loose?'rgba(255,201,77,.85)':C.line; ctx.lineWidth=2.2;
       dash(!!m.loose);
@@ -3972,6 +4081,9 @@ const PALETTE=[
   ['n','Snow',       'Solid, but it drags. Running across it is slow going.'],
   ['=','Thin',       'Land on it from above, jump up through it, press \u2193 to drop through.'],
   ['~','Crumbling',  'Holds you a moment, breaks, then comes back a few seconds later.'],
+  ['M','Platform \u2195','A platform that slides up and down. It travels as far as the clear space above and below lets it \u2014 draw a row of them for a wider one.'],
+  ['H','Platform \u2194','A platform that slides left and right, as far as the clear space beside it allows.'],
+  ['u','Unstable',    'A platform that never quite settled. It bobs on the spot and sags under your weight.'],
   ['^','Spikes up',  'Kills on touch. Sits on the floor pointing up.'],
   ['v','Spikes down','Kills on touch. Hangs from the ceiling pointing down.'],
   ['w','Powder',     'Looks exactly like snow in play. You sink in, cannot run, and freeze.'],
@@ -4057,6 +4169,18 @@ function gridFromLevel(i){
   const L=LEVELS[i]; if(!L) return null;
   const seg=L.chunks.map(id=>CHUNKS[id]), cols=seg.length*CW, g=[];
   for(let y=0;y<ROWS;y++){ let row=''; for(const c of seg) row+=c.t[y]; g.push(row.split('')); }
+  /* a chunk's platforms live beside its text, so a remix used to lose them —
+     write them back in as the marks the builder understands */
+  seg.forEach((c,k)=>{
+    const ox=k*CW;
+    (c.m||[]).forEach(m=>{
+      const ch=(m.ax===m.bx)?'M':'H';
+      const row=Math.round((m.ay+m.by)/2), col=Math.round((m.ax+m.bx)/2)+ox;
+      if(row<0||row>=ROWS) return;
+      for(let i2=0;i2<m.w;i2++){ const cx=col+i2;
+        if(cx>=0 && cx<cols && g[row][cx]==='.') g[row][cx]=ch; }
+    });
+  });
   let hasP=false, hasX=false;                 /* exactly one spawn and one exit */
   for(let y=0;y<ROWS;y++) for(let x=0;x<cols;x++){
     const ch=g[y][x];
@@ -4085,6 +4209,7 @@ function loadCustom(g,cols){
     else if(ch==='p'){ G.portA.push({x:x*TS+TS/2,y:y*TS+TS/2}); G.grid[y][x]='.'; }
     else if(ch==='q'){ G.portB.push({x:x*TS+TS/2,y:y*TS+TS/2}); G.grid[y][x]='.'; }
   }
+  liftPlatforms();
   if(!G.spawn) G.spawn={x:TS+5, y:(ROWS-4)*TS+(TS-PH)};
   pairPortals();
   /* the theme rewrites the sheet the same way a world does — but no powder,
@@ -4127,23 +4252,84 @@ function edPaint(e){
   }
   ED.grid[cy][cx]=ED.tool;
 }
+/* Spawn, exit, parts, keys, datums and both portal ends are lifted out of the
+   grid the moment a sheet loads, so drawTiles() has no case for any of them —
+   in the builder they are still plain characters sitting in ED.grid and used to
+   come out as a letter in a box, or, for portals, as nothing at all. Draw them
+   the way they look in play so what you place is what you get. */
+function edObject(ch, x, y){
+  if('PXoKCpqtMHu'.indexOf(ch)<0) return;
+  if(ch==='M'||ch==='H'||ch==='u'){
+    /* platforms are objects with a path, not tiles — draw the slab and the run
+       it will make once the sheet is played */
+    const loose=ch==='u';
+    ctx.strokeStyle='rgba(94,143,181,.30)'; ctx.lineWidth=1; dash(true);
+    ctx.beginPath();
+    if(ch==='H'){ ctx.moveTo(x+2,y+TS/2); ctx.lineTo(x+TS-2,y+TS/2); }
+    else        { ctx.moveTo(x+TS/2,y+3); ctx.lineTo(x+TS/2,y+TS-3); }
+    ctx.stroke(); dash(false);
+    ctx.fillStyle=C.fill; ctx.fillRect(x+1,y+TS/2-4,TS-2,8);
+    ctx.fillStyle=hatch;  ctx.fillRect(x+1,y+TS/2-4,TS-2,8);
+    ctx.strokeStyle=loose?'rgba(255,201,77,.8)':C.line; ctx.lineWidth=1.2; dash(loose);
+    ctx.strokeRect(x+1.5,y+TS/2-3.5,TS-3,7); dash(false);
+    ctx.fillStyle=loose?'rgba(255,201,77,.9)':'rgba(255,122,47,.85)';
+    ctx.fillRect(x+TS/2-4,y+TS/2-1,8,2);
+    return;
+  }
+  if(ch==='t'){
+    /* Phase B is drawn as a faint ghost whenever its twin is the solid one, which
+       is honest in play and useless in a builder. Give it the same weight as A,
+       dashed so the two are still telling apart. */
+    ctx.fillStyle='rgba(94,143,181,.14)'; ctx.fillRect(x,y,TS,TS);
+    ctx.fillStyle=hatch; ctx.fillRect(x,y,TS,TS);
+    ctx.strokeStyle=C.line; ctx.lineWidth=1; dash(true);
+    ctx.strokeRect(x+.5,y+.5,TS-1,TS-1); dash(false);
+    return;
+  }
+  const mx=x+TS/2, my=y+TS/2;
+  const col = ch==='P'?C.accent : (ch==='X'||ch==='C')?C.datum
+            : (ch==='o'||ch==='K')?C.amber : ch==='p'?C.mirror : '#4CC9E8';
+  ctx.fillStyle=col; ctx.globalAlpha=0.13; ctx.fillRect(x,y,TS,TS); ctx.globalAlpha=1;
+  ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=1.3; dash(false);
+  ctx.save(); ctx.translate(mx,my);
+  if(ch==='p'||ch==='q'){
+    for(let k=0;k<3;k++){ ctx.beginPath(); ctx.ellipse(0,0,10-k*2.6,6-k*1.7,k*1.05,0,6.2832); ctx.stroke(); }
+    ctx.fillRect(-1.5,-1.5,3,3);
+  } else if(ch==='o'){
+    const r=6.5;
+    ctx.globalAlpha=0.30; ctx.beginPath();
+    ctx.moveTo(0,-r); ctx.lineTo(r,0); ctx.lineTo(0,r); ctx.lineTo(-r,0); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha=1; ctx.stroke(); ctx.fillRect(-1,-1,2,2);
+  } else if(ch==='K'){
+    ctx.beginPath(); ctx.arc(0,-3,4,0,6.2832); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,1); ctx.lineTo(0,8); ctx.moveTo(0,5); ctx.lineTo(4,5); ctx.stroke();
+  } else if(ch==='C'){
+    ctx.beginPath(); ctx.moveTo(-0.5,10); ctx.lineTo(-0.5,-9); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,-9); ctx.lineTo(9,-5.5); ctx.lineTo(0,-2); ctx.closePath();
+    ctx.globalAlpha=0.30; ctx.fill(); ctx.globalAlpha=1; ctx.stroke();
+    ctx.fillRect(-3,9,6,2);
+  } else if(ch==='X'){
+    dash(true); ctx.beginPath(); ctx.arc(0,0,10,0,6.2832); ctx.stroke(); dash(false);
+    ctx.globalAlpha=0.55; ctx.beginPath(); ctx.arc(0,0,6.5,0,6.2832); ctx.stroke(); ctx.globalAlpha=1;
+    ctx.beginPath(); ctx.moveTo(-6,0); ctx.lineTo(6,0); ctx.moveTo(0,-6); ctx.lineTo(0,6); ctx.stroke();
+    ctx.fillRect(-1.5,-1.5,3,3);
+  } else {                                    /* P — the box you start as */
+    ctx.globalAlpha=0.30; ctx.fillRect(-PW/2,-PH/2,PW,PH); ctx.globalAlpha=1;
+    ctx.strokeRect(-PW/2+.5,-PH/2+.5,PW-1,PH-1);
+  }
+  ctx.restore();
+}
 function drawEditor(){
   const cam=Math.round(G.cam);
   ctx.save(); ctx.translate(-cam,0);
   drawGrid(cam);
   G.grid=ED.grid; COLS=ED.cols; G.drawMask=null; G.revealCols=undefined; G.rmode='normal';
+  /* pin the timed tiles to their present state — what you place is what you see */
+  G.phase=0; G.doorOpen=0; G.phaseT=0; G.broken=G.broken||new Map(); G.crumbs=G.crumbs||new Map();
   drawTiles(cam);
   const k0=Math.max(0,Math.floor(cam/TS)-1), k1=Math.min(ED.cols-1,Math.floor((cam+VW)/TS)+1);
-  for(let cy=0;cy<ROWS;cy++) for(let cx=k0;cx<=k1;cx++){
-    const ch=ED.grid[cy][cx], x=cx*TS, y=cy*TS;
-    if(ch==='P'||ch==='X'||ch==='o'||ch==='K'||ch==='C'){
-      ctx.fillStyle = ch==='P'?C.accent : ch==='X'?C.datum : ch==='C'?C.datum : C.amber;
-      ctx.globalAlpha=0.22; ctx.fillRect(x,y,TS,TS); ctx.globalAlpha=1;
-      ctx.strokeStyle=ctx.fillStyle; ctx.lineWidth=1; dash(true); ctx.strokeRect(x+.5,y+.5,TS-1,TS-1); dash(false);
-      ctx.font='700 10px ui-monospace,monospace'; ctx.textAlign='center';
-      ctx.fillText(ch, x+TS/2, y+TS/2+4); ctx.textAlign='left';
-    }
-  }
+  for(let cy=0;cy<ROWS;cy++) for(let cx=k0;cx<=k1;cx++)
+    edObject(ED.grid[cy][cx], cx*TS, cy*TS);
   ctx.strokeStyle='rgba(255,122,47,.5)'; ctx.lineWidth=1;
   ctx.strokeRect(0.5,0.5,ED.cols*TS-1,ROWS*TS-1);
   ctx.restore();
@@ -4414,6 +4600,8 @@ function closeIntro(){
 function togglePause(){
   if(G.state==='play'){
     $('btnSkip').classList.toggle('hidden', G.lvl<0);
+    /* testing a sheet you drew: the way out is back to the drawing, not the list */
+    $('btnToBuild').classList.toggle('hidden', G.lvl!==-1);
     G.state='pause'; showOv('ovPause'); }
   else if(G.state==='pause'){ G.state='play'; showOv(null); }
 }
@@ -4704,6 +4892,25 @@ function swatchDraw(g, ch){
     else        for(let i=0;i<2;i++){ const b=i*12; g.moveTo(b+1,0); g.lineTo(b+6,T-7); g.lineTo(b+11,0); }
     g.closePath(); g.fill(); g.stroke();
   }
+  else if(ch==='M'||ch==='H'||ch==='u'){
+    const loose=ch==='u';
+    g.strokeStyle='rgba(94,143,181,.30)'; g.lineWidth=1; dsh(true);
+    g.beginPath();
+    if(ch==='H'){ g.moveTo(2,T/2); g.lineTo(T-2,T/2); } else { g.moveTo(T/2,3); g.lineTo(T/2,T-3); }
+    g.stroke(); dsh(false);
+    g.fillStyle=C.fill; g.fillRect(2,T/2-4,T-4,8);
+    g.strokeStyle=loose?'rgba(255,201,77,.85)':C.line; g.lineWidth=1.2; dsh(loose);
+    g.strokeRect(2.5,T/2-3.5,T-5,7); dsh(false);
+    g.fillStyle=loose?'rgba(255,201,77,.9)':'rgba(255,122,47,.9)';
+    if(loose){ g.fillRect(T/2-4,T/2-1,8,2); }
+    else if(ch==='H'){
+      g.beginPath(); g.moveTo(4,T/2); g.lineTo(8,T/2-3); g.lineTo(8,T/2+3); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(T-4,T/2); g.lineTo(T-8,T/2-3); g.lineTo(T-8,T/2+3); g.closePath(); g.fill();
+    } else {
+      g.beginPath(); g.moveTo(T/2,3); g.lineTo(T/2-3,7); g.lineTo(T/2+3,7); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(T/2,T-3); g.lineTo(T/2-3,T-7); g.lineTo(T/2+3,T-7); g.closePath(); g.fill();
+    }
+  }
   else if(ch==='B'){
     g.fillStyle=C.fill; g.fillRect(0,10,T,T-10);
     g.strokeStyle=C.cyan; g.lineWidth=1.6; g.beginPath(); g.moveTo(1,11); g.lineTo(T-1,11); g.stroke();
@@ -4885,6 +5092,7 @@ $('btnSkip').onclick=()=>{
 };
 $('btnRetry2').onclick=()=>{ G.state='play'; showOv(null); const d=G.deaths+1; reloadSheet(); G.deaths=d; syncHud(); };
 $('btnQuit').onclick=()=>{ REMIX=false; TEST.on=false; $('btnGiveUp').classList.add('hidden'); G.state='menu'; buildPicker(); showOv('ovLevels'); };
+$('btnToBuild').onclick=()=>{ if(G.lvl===-1) openBuild(); };
 $('btnRetry').onclick=()=>{ G.state='play'; showOv(null); reloadSheet(); };
 $('btnNext').onclick=nextLevel;
 $('btnList').onclick=()=>{ G.state='menu'; buildPicker(); showOv('ovLevels'); };

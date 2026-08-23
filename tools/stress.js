@@ -6,7 +6,8 @@
      node tools/stress.js --only fuzz     # one phase
      node tools/stress.js --deep          # longer fuzzing
 
-   Phases: load, fuzz, ui, codes, ghosts, daily, ranking, save, builder.       */
+   Phases: load, fuzz, ui, codes, ghosts, daily, ranking, save, builder,
+   cuts, marathon, spawnsafe, portals, respawn, intros, hud, platforms, eater. */
 const fs=require('fs'), vm=require('vm'), path=require('path');
 
 const argv=process.argv.slice(2);
@@ -57,7 +58,7 @@ const sandbox={ console,
   setTimeout:()=>0, clearTimeout:noop,
   localStorage:{getItem:k=>store[k]||null,setItem:(k,v)=>store[k]=v,removeItem:k=>delete store[k]},
   Math:sandboxMath, Date, JSON, Array, Object, String, Number, Proxy, Set, Map, RegExp,
-  Error, Promise, isFinite, isNaN, parseInt, parseFloat };
+  Error, Promise, isFinite, isNaN, parseInt, parseFloat, Uint8Array };
 sandbox.window.AudioContext=function(){ throw new Error('no audio'); };
 sandbox.globalThis=sandbox;
 vm.createContext(sandbox);
@@ -186,7 +187,7 @@ function phaseFuzz(){
 function phaseUi(){
   head('ui — random clicks through every menu, '+(DEEP?4000:1500)+' of them');
   const ids=['btnPlay','btnLevels','btnHow','btnTest','btnDaily','btnBuild','btnBack','btnHowBack',
-    'btnResume','btnRetry2','btnSkip','btnQuit','btnGiveUp','btnNext','btnRetry','btnList',
+    'btnResume','btnRetry2','btnSkip','btnQuit','btnToBuild','btnGiveUp','btnNext','btnRetry','btnList',
     'btnRankAgain','btnRankDone','btnWipe','bExit','bTest','bCompile','bPaste','bSave','bLoad',
     'bClear','bRemix','bWide-','bWide+','bSlot1','bSlot2','bSlot3','adGo','adNo'];
   run("G.state='menu'");
@@ -697,12 +698,159 @@ function phaseMarathon(){
   }
 }
 
+/* ================= phase: render =================
+   In a code world the sheet is drawn as its own source. Every tile needs its own
+   colour and glyphs there — falling through to the generic green rendered ice,
+   thin platforms, updraft and doors as plain solid blocks. */
+function phaseRender(){
+  head('render — no tile falls through to a generic block in a code world');
+  const seen=run(`(()=>{ const s=new Set();
+    for(let i=0;i<LEVELS.length;i++){ loadLevel(i); if(G.rmode!=='code') continue;
+      for(const r of G.grid0) for(const c of r) if(c!=='.') s.add(c); }
+    for(const t of BTHEMES) if((t.mod||{}).render==='code'){
+      for(const e of PALETTE) if('.PXoKCpqMHu'.indexOf(e[0])<0) s.add(e[0]); }
+    return Array.from(s).sort().join('');})()`);
+  const table=run('Object.keys(CODEGL).join("")');
+  const missing=[];
+  for(const ch of seen){
+    if('^v<>'.indexOf(ch)>=0){ ok('render','hazard '+ch+' reads as a hazard'); continue; }
+    if(table.indexOf(ch)<0) missing.push(ch);
+    else ok('render','tile '+ch+' has its own code treatment');
+  }
+  if(missing.length) bug('render','tiles with no code treatment, drawn as plain blocks: '+missing.join(' '));
+  /* and the glyph sets have to be distinguishable from the solid one */
+  const dupes=run(`(()=>{ const gl=CODEGL['#'][1], d=[];
+    for(const k of Object.keys(CODEGL)) if(k!=='#' && CODEGL[k][1]===gl) d.push(k);
+    return d.join('');})()`);
+  if(dupes) bug('render','tiles sharing the solid block glyph set: '+dupes);
+  else ok('render','every treatment is distinct');
+  console.log('       '+seen.length+' tile characters reachable in a code world');
+}
+
+/* ================= phase: platforms =================
+   A platform that moves into you must not resolve the overlap by ejecting you
+   into solid rock. It used to: the shorter route won regardless of what was
+   there, unstick() shoved you back, and the pair of them walked you down
+   through the floor a few pixels a frame until you came out under the sheet. */
+function phasePlatforms(){
+  head('platforms — a platform may never post you inside the geometry');
+  run(`
+  function _rigP(rows){
+    loadLevel(0); G.state='play';
+    for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++) G.grid[y][x]=(rows[y]&&rows[y][x])||'.';
+    G.saws=[];G.gems=[];G.keys=[];G.checks=[];G.portA=[];G.portB=[];G.portPairs=[];
+    G.crumbs=new Map();G.broken=new Map();G.movers=[];
+    P.dead=0;P.grace=0;P.g=1;P.rideM=null;P.vx=0;P.vy=0; }
+  function _movP(ax,ay,by,w,spd){ const m={ax:ax*TS,ay:ay*TS,bx:ax*TS,by:by*TS,w:w*TS,h:TS,
+    spd:spd,ph:0,u:0,x:ax*TS,y:ay*TS,dx:0,dy:0}; G.movers.push(m); return m; }
+  function _frameP(){
+    for(const m of G.movers){ const len=Math.hypot(m.bx-m.ax,m.by-m.ay)||1;
+      m.u+=m.spd/len*2; const f=tri(m.u);
+      const nx=m.ax+(m.bx-m.ax)*f, ny=m.ay+(m.by-m.ay)*f;
+      m.dx=nx-m.x; m.dy=ny-m.y; m.x=nx; m.y=ny; }
+    if(P.rideM){ const rm=P.rideM,ox=P.x,oy=P.y;
+      P.x+=rm.dx; if(boxSolid(P.x,P.y)) P.x=ox;
+      P.y+=rm.dy; if(boxSolid(P.x,P.y)) P.y=oy; }
+    P.rideM=null;
+    P.vy+=GRAV*P.g; if(P.vy>MAXFALL) P.vy=MAXFALL;
+    unstick(); P.ground=0; moveX(P.vx); moveY(P.vy);
+    return boxSolid(P.x,P.y); }
+  `);
+  const floor=y=>y===15?'#'.repeat(32):'.'.repeat(32);
+  const rows=f=>Array.from({length:18},(_,y)=>f(y));
+  const perch=rows(floor); perch[11]='.........#......................';
+  const ceil =rows(y=> y===15||y===5 ? '#'.repeat(32) : '.'.repeat(32));
+  const ledge=rows(floor); ledge[9]='........####....................';
+  const scenes=[
+    ['a descending platform onto a player on the floor',
+     '(()=>{ const m=_movP(9,8,14,2,1.0); P.x=9*TS+2; P.y=15*TS-PH-0.01; })()', rows(floor), 240],
+    ['a descending platform onto a player on a one-tile perch',
+     '(()=>{ const m=_movP(9,5,11,2,1.0); P.x=9*TS+5; P.y=11*TS-PH-0.01; })()', perch, 200],
+    ['riding a rising platform into a ceiling',
+     '(()=>{ const m=_movP(8,12,6,3,1.0); P.x=m.x+20; P.y=m.y-PH-0.01; })()', ceil, 200],
+    ['a rising platform through a player standing on a ledge',
+     '(()=>{ const m=_movP(9,13,6,2,1.0); P.x=9*TS+2; P.y=9*TS-PH-0.01; })()', ledge, 200],
+  ];
+  for(const [name,mk,grid,n] of scenes){
+    run('_rigP('+JSON.stringify(grid)+')'); run(mk);
+    let bad=0;
+    for(let f=0;f<n;f++) if(run('_frameP()')) bad++;
+    if(bad) bug('platforms', name+': '+bad+' of '+n+' frames left the player inside solid tiles');
+    else ok('platforms', name);
+  }
+  /* and across every shipped sheet that carries one */
+  const sheets=run('(()=>{const a=[];for(let i=0;i<LEVELS.length;i++){try{loadLevel(i);}catch(e){continue;}'+
+                   'if(G.movers.length)a.push(i);}return a;})()');
+  let embedded=0, inside=0;
+  for(const lvl of sheets){
+    run('G.state="play"; loadLevel('+lvl+'); IN.l=IN.r=IN.u=IN.d=IN.dashP=IN.jumpHeld=0;');
+    for(let f=0;f<160;f++){
+      run(`(()=>{ if(P.dead){ respawn(); return; }
+        if(Math.random()<0.16){ IN.l=Math.random()<0.5?1:0; IN.r=IN.l?0:(Math.random()<0.5?1:0); }
+        if(Math.random()<0.13){ press('jump'); IN.jumpHeld=1; }
+        if(Math.random()<0.08) IN.jumpHeld=0;
+        if(Math.random()<0.05) IN.dashP=1;
+        step(); })()`);
+      if(run('P.dead||G.state!=="play"||P.grace>0')) continue;
+      if(run('boxSolid(P.x,P.y)')) embedded++;
+      if(run(`(()=>{const r={x:P.x,y:P.y,w:PW,h:PH};
+        for(const m of G.movers){ if(m.gone) continue;
+          if(overlap(r,m) && Math.min((r.y+PH)-m.y,(m.y+m.h)-r.y,(r.x+PW)-m.x,(m.x+m.w)-r.x)>1) return 1; }
+        return 0;})()`)) inside++;
+    }
+  }
+  if(embedded) bug('platforms', embedded+' frames ended inside solid tiles across '+sheets.length+' sheets');
+  if(inside)   bug('platforms', inside+' frames ended more than a pixel inside a platform');
+  if(!embedded && !inside) ok('platforms','all '+sheets.length+' sheets with a platform');
+  console.log('       4 scenes and '+sheets.length+' sheets with a platform');
+}
+
+/* ================= phase: eater =================
+   The world eater deletes the drawing. All of it — asking isSolid() for what
+   counts spared every hazard and left ghost blocks standing. */
+function phaseEater(){
+  head('eater — the cursor can reach every tile on the sheet, not just the solid ones');
+  const r=run(`(()=>{ const out=[];
+    for(let i=0;i<LEVELS.length;i++){ loadLevel(i); if(!G.eatOn) continue;
+      const claimed=[]; for(let y=0;y<ROWS;y++) claimed.push(new Uint8Array(COLS));
+      for(const p of G.pieces) for(let y=p.y;y<=p.y2;y++) for(let x=p.x;x<p.x+p.len;x++) claimed[y][x]=1;
+      const miss={};
+      for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
+        const c=G.grid[y][x];
+        if(c!=='.' && !claimed[y][x]) miss[c]=(miss[c]||0)+1; }
+      out.push({lvl:i+1, miss, n:G.pieces.length}); }
+    return out;})()`);
+  let total=0;
+  for(const sheet of r){
+    const n=Object.values(sheet.miss).reduce((a,b)=>a+b,0);
+    if(n){ total+=n;
+      if(total===n) bug('eater','sheet '+sheet.lvl+' has tiles the cursor can never reach: '+JSON.stringify(sheet.miss)); }
+    else ok('eater','sheet '+sheet.lvl);
+  }
+  if(total) bug('eater', total+' unreachable tiles across '+r.length+' sheets');
+  /* and it has to keep up with its own front */
+  const pace=run(`(()=>{ let worst=0;
+    for(let i=0;i<LEVELS.length;i++){ loadLevel(i); if(!G.eatOn) continue;
+      G.state='play'; P.dead=0;
+      for(let f=0;f<4000;f++){
+        P.x=Math.min(COLS*TS-40, G.eater.front+200); stepEater();
+        let done=0, should=0;
+        for(const p of G.pieces){ if(p.gone) done++; if(p.x*TS<=G.eater.front) should++; }
+        if(should-done>worst) worst=should-done;
+        if(G.pieces.every(p=>p.gone)) break; } }
+    return worst;})()`);
+  if(pace>12) bug('eater','the cursor falls '+pace+' pieces behind its own front');
+  else ok('eater','pacing');
+  console.log('       '+r.length+' eater sheets, '+total+' unreachable tiles, worst backlog '+pace+' pieces');
+}
+
 /* ---------- run ---------- */
 const PHASES={load:phaseLoad, fuzz:phaseFuzz, ui:phaseUi, codes:phaseCodes,
               ghosts:phaseGhosts, daily:phaseDaily, ranking:phaseRanking,
               save:phaseSave, builder:phaseBuilder, cuts:phaseCuts,
               marathon:phaseMarathon, spawnsafe:phaseSpawnsafe, portals:phasePortals,
-              respawn:phaseRespawn, intros:phaseIntros, hud:phaseHud};
+              respawn:phaseRespawn, intros:phaseIntros, hud:phaseHud,
+              platforms:phasePlatforms, eater:phaseEater, render:phaseRender};
 console.log('stress — seed '+SEED+(DEEP?' (deep)':'')+(TARGET?' against '+TARGET:''));
 const list = ONLY? [ONLY] : Object.keys(PHASES);
 for(const p of list){

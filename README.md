@@ -91,14 +91,16 @@ node tools/stress.js                      # everything else, see below
 ```
 
 `tools/stress.js` drives the whole game from a seeded PRNG — including the game's
-own `Math.random` — so anything it finds replays exactly with `--seed N`. Thirteen
+own `Math.random` — so anything it finds replays exactly with `--seed N`. Eighteen
 phases: every sheet loads with a spawn, an exit and a sane grid; random input
 against sheets with invariants checked every frame; random clicks through every
 menu; hostile share codes; ghost round trips; daily determinism; the ranking search
 terminating; the save surviving garbage; the builder's resize and paint; every
 interlude ending by key and by tap; sheets played back to back watching for leaks;
-portals not crossing or bouncing; and no start or datum that can kill you while you
-stand still.
+portals not crossing or bouncing; no start or datum that can kill you while you
+stand still; no moving platform that can post you inside the geometry; the world
+eater able to reach every tile on its sheet rather than only the solid ones; and no
+tile falling through to a generic block in a code world.
 
 ```bash
 node tools/stress.js --seed 7     # a different run
@@ -113,9 +115,16 @@ which is exactly how the harmless-saw bug survived for as long as it did.
 ## Build mode
 
 A **Build** button sits on the menu from the start (`BUILD_AT` in `game.html`).
-Paint a sheet from a 23-tile palette — each swatch is drawn the way the sheet itself draws
+Paint a sheet from a 26-tile palette — each swatch is drawn the way the sheet itself draws
 that tile, with its name and its rule underneath — size it 32–1088 columns, keep three save
-slots, and test-play it in place.
+slots, and test-play it in place. Pausing a sheet you built offers **Back to the builder**
+rather than the sheet list.
+
+Three of the palette entries are not tiles but objects with a path: **Platform ↕** and
+**Platform ↔** slide as far as the clear space around them allows — a platform boxed in
+on both sides quietly becomes the ledge it looks like — and **Unstable** bobs on the spot
+and sags under your weight. A horizontal run of the same mark makes one wider platform.
+Remixing an official sheet brings its platforms across as these marks.
 
 **Remix** opens an official sheet's geometry in the editor to take apart. **Themes** re-skin
 your sheet with a world's rules: Blueprint and Cursor are free, and Space, Code, Whiteout,

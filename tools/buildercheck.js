@@ -2,7 +2,7 @@
    does to a custom sheet. Ad and SDK behaviour lives in tools/pokicheck.js.
 
      node tools/buildercheck.js                                             */
-const {run}=require(require('path').join(__dirname,'harness.js'));
+const {run, ink}=require(require('path').join(__dirname,'harness.js'));
 let fail=0;
 const ok=(c,m)=>{ if(!c){ console.log('FAIL '+m); fail++; } else console.log('  ok  '+m); };
 
@@ -54,6 +54,27 @@ for(const k of themes){
   ok(!r.powder, k+': no powder dropped into a hand-drawn sheet');
   ok(r.spawn, k+': still has a spawn');
 }
+
+/* ---- every palette entry has to be visible once you place it ----
+   Spawn, exit, parts, keys, datums and both portal ends are lifted out of the
+   grid when a sheet loads, so drawTiles() has no case for them. Portals used to
+   fall straight through that gap: placeable, saved, and playable, but nothing
+   on screen until you hit test. */
+run('openBuild(); ED.cols=32; G.cam=0;');
+const blank=()=>run(`ED.grid=Array.from({length:ROWS},()=>Array(ED.cols).fill('.'));`);
+const invisible=[];
+for(const [ch,name] of run('PALETTE.map(p=>[p[0],p[1]])')){
+  if(ch==='.') continue;
+  blank();
+  const base=ink(()=>run('drawEditor()'));
+  run(`ED.grid[8][10]=${JSON.stringify(ch)};`);
+  const drawn=ink(()=>run('drawEditor()'))-base;
+  ok(drawn>0, 'builder draws '+name+' ['+ch+']'+(drawn>0?'':' — nothing on screen'));
+  if(drawn<=0) invisible.push(ch);
+}
+ok(invisible.length===0, 'no palette entry is invisible in the builder'+
+   (invisible.length?' — '+invisible.join(' '):''));
+blank();
 
 /* ---- ownership ---- */
 ok(run('themeOwned("blueprint")')===true, 'blueprint is free');
