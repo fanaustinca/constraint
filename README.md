@@ -84,6 +84,7 @@ cd tools
 node solvability.js         # bot-plays all 600 sheets, reports any it cannot finish
 node solvability.js 0 60    # or just a range
 node bounds.js              # asserts the player never leaves the sheet
+cd .. && node tools/pokicheck.js poki/index.html   # SDK lifecycle and ad rules
 ```
 
 `solvability.js` proves a sheet is *completable*. It does not prove it is fun, fair, or correctly
@@ -92,7 +93,7 @@ which is exactly how the harmless-saw bug survived for as long as it did.
 
 ## Build mode
 
-Clear ten sheets and a **Build** button appears on the menu (`BUILD_AT` in `game.html`).
+A **Build** button sits on the menu from the start (`BUILD_AT` in `game.html`).
 Paint a sheet from a 23-tile palette — each swatch is drawn the way the sheet itself draws
 that tile, with its name and its rule underneath — size it 32–1088 columns, keep three save
 slots, and test-play it in place.
@@ -133,16 +134,38 @@ node tools/build.js       # game.html -> index.html      (GitHub Pages)
 node tools/build-poki.js  # game.html -> poki/index.html (Poki submission)
 ```
 
-`index.html` is the Pages build: document shell added, dev code stripped, zero external
-requests. `poki/index.html` adds Poki's SDK and a full-screen embed layout, and is the only
-build that loads anything from another origin. Ads are wired so nothing is ever gated on
-them — with an ad blocker, or off Poki entirely, every call falls through and the game plays
-in full. A full-screen break is only ever requested at the moment a sheet is finished and only
-after six minutes of actual play; Skip and the optional builder unlocks are opt-in rewarded
-videos that grant their reward regardless.
+`index.html` is the Pages build: document shell added, dev code and the rev-code box
+stripped, zero external requests. `poki/index.html` adds Poki's SDK and a full-screen embed
+layout, and is the only build that loads anything from another origin.
+
+Ad handling follows Poki's lifecycle rules rather than any schedule of our own:
+
+- **Frequency is Poki's.** There is no internal timer. `commercialBreak()` is requested at
+  every clean sheet transition and their capping decides whether one runs.
+- **Only back into gameplay.** A break is never requested on the way to a menu, a daily
+  summary, the builder, or an interlude — `nextLevel()` resolves the destination first.
+- **`gameLoadingFinished()` before anything else.** The menu stays behind a loading panel
+  until `PokiSDK.init()` settles, and `gameplayStart()` cannot fire before it. `init()` races
+  an eight second timeout so a blocked SDK cannot strand anyone.
+- **Frozen during a break.** Audio off, simulation halted, keyboard and pointer ignored, the
+  whole page click-locked, `gameplayStop()` first.
+- **Rewards need a real view.** In the Poki build an incomplete or blocked ad grants nothing.
+  In the standalone builds there is no ad economy, so the optional unlocks are simply given.
+- **A hidden tab is not gameplay** — `visibilitychange` closes the session and pauses.
+
+`node tools/pokicheck.js poki/index.html` runs a built file against a mock SDK that records
+call order and asserts all of the above.
 
 ## Saves
 
-Everything is local, in one `localStorage` key, and nothing is sent anywhere. What comes back
-out of it is treated as untrusted: own keys only (so a `__proto__` key cannot re-point the
-object), and every field coerced to the shape the game expects or dropped.
+One `localStorage` key, `constraint.save.v1`: progress, best times, parts, ranks, the daily
+streak, ghost recordings and your three builder slots.
+
+In the artifact and Pages builds that is all it is — nothing leaves the browser. **On Poki it
+does leave the browser.** Poki's SDK syncs ordinary `localStorage` entries to their cloud for
+signed-in players, which is a feature (progress follows you between devices) but it does mean
+ghosts and custom sheets are stored on Poki's side too. A key prefixed `poki_ignore` opts out
+if that is ever not wanted.
+
+What comes back out is treated as untrusted regardless: own keys only, so a `__proto__` key
+cannot re-point the object, and every field coerced to the shape the game expects or dropped.

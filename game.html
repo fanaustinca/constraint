@@ -72,6 +72,16 @@ button.primary{border-color:var(--accent); color:var(--accent)}
 button.primary:hover{background:var(--accent); color:var(--ink)}
 button:focus-visible{outline:2px solid var(--cyan); outline-offset:2px}
 button.tiny{padding:5px 10px; font-size:10px; letter-spacing:.1em}
+/* Anything that costs a video is marked as one and is never the highlighted
+   action: the free way on is the primary button, this one is amber and wears
+   a film icon so nobody clicks it expecting the game to just continue. */
+button.reward{border-color:var(--amber); color:var(--amber)}
+button.reward:hover{background:var(--amber); color:var(--ink)}
+button.free{border-color:var(--datum); color:var(--datum)}
+button.warn{border-color:var(--hazard); color:var(--hazard)}
+button.warn:hover{background:var(--hazard); color:var(--ink)}
+button.free:hover{background:var(--datum); color:var(--ink)}
+.adtag{font-size:.92em; letter-spacing:.1em; opacity:.95}
 
 /* ---- overlays ---- */
 .ov{
@@ -170,22 +180,27 @@ button.tiny{padding:5px 10px; font-size:10px; letter-spacing:.1em}
 /* ---- touch pads ---- */
 .touch{position:absolute; inset:0; display:none; z-index:4; pointer-events:none}
 .touch.on{display:block}
-.touch b{
-  position:absolute; width:15%; padding-bottom:15%; bottom:4%;
+.touch button{
+  position:absolute; width:16%; padding:0 0 16%; bottom:4%;
   border:1.5px solid rgba(94,143,181,.55);
   background:rgba(20,31,43,.42);
   border-radius:50%; pointer-events:auto; touch-action:none;
-  color:var(--text); font:700 13px/1 var(--mono); letter-spacing:.06em;
-  display:flex; align-items:center; justify-content:center;
+  color:var(--text);
   -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;
 }
-.touch b span{position:absolute}
-.touch b.act{border-color:var(--accent); color:var(--accent); background:rgba(255,122,47,.22)}
+/* the circle gets its height from padding, so the content box is zero tall and
+   flex centring has nothing to centre against: the glyph is placed against the
+   padding box instead, which is the whole bubble */
+.touch button svg{
+  position:absolute; inset:0; margin:auto; width:46%; height:46%;
+  fill:none; stroke:currentColor; stroke-width:2.4;
+  stroke-linecap:round; stroke-linejoin:round;
+}
+.touch button.act{border-color:var(--accent); color:var(--accent); background:rgba(255,122,47,.22)}
 .touch .l{left:3.5%}
-.touch .r{left:21%}
-.touch .a{right:3.5%; bottom:5%; width:19%; padding-bottom:19%; font-size:14px}
-.touch .bb{right:25%; bottom:5%}
-.touch .cc{right:25%; bottom:27%; width:13%; padding-bottom:13%; font-size:11px}
+.touch .r{left:22%}
+.touch .a{right:3.5%; bottom:5%; width:20%; padding-bottom:20%}
+.touch .bb{right:26%; bottom:5%; width:17%; padding-bottom:17%}
 .buildpanel{
   display:none; flex-direction:column; gap:8px;
   background:var(--panel); border:1px solid var(--gridmaj); padding:10px;
@@ -238,6 +253,8 @@ button.tiny{padding:5px 10px; font-size:10px; letter-spacing:.1em}
 }
 .codemsg.bad{color:var(--hazard)}
 .hidden{display:none !important}
+/* nothing on the page is clickable while a break is on screen */
+body.adlock .app{pointer-events:none}
 /* portal embed: the sheet fills the screen, chrome collapses onto it */
 body.embed{padding:0; overflow:hidden; touch-action:none; overscroll-behavior:none; height:100%}
 body.embed .app{height:100vh; height:100dvh; max-width:none; gap:0}
@@ -287,9 +304,15 @@ body.embed .buildpanel{
 
   <div class="sheet">
     <div class="stage">
-      <canvas id="c"></canvas>
+      <canvas id="c" aria-label="CONSTRAINT playfield" role="img">A precision platformer. This game needs a browser with canvas support.</canvas>
 
-      <div class="ov on" id="ovMenu">
+      <div class="ov on" id="ovBoot">
+        <div class="dimline"><i></i><span>loading</span><i></i></div>
+        <h1>CONS<b>T</b>RAINT</h1>
+        <p>Setting up.</p>
+      </div>
+
+      <div class="ov" id="ovMenu">
         <div class="dimline"><i></i><span id="sheetCount">20 sheets</span><i></i></div>
         <h1>CONS<b>T</b>RAINT</h1>
         <p>A precision platformer. Every world adds one rule. Death is cheap — the reset is instant, and datums keep it that way.</p>
@@ -373,7 +396,7 @@ body.embed .buildpanel{
         <h2>Paused</h2>
         <div class="row">
           <button class="primary" id="btnResume">Resume</button>
-          <button id="btnRetry2">Restart sheet</button>
+          <button class="free" id="btnRetry2">Restart sheet</button>
           <button id="btnSkip">Skip sheet</button>
           <button id="btnQuit">Sheet list</button>
           <button class="tiny hidden" id="btnGiveUp">End trial here</button>
@@ -385,8 +408,8 @@ body.embed .buildpanel{
         <h2 id="adText">Unlock</h2>
         <p id="adSub"></p>
         <div class="row">
-          <button class="primary" id="adGo">Watch a video</button>
-          <button id="adNo">Not now</button>
+          <button class="free primary" id="adNo">No thanks</button>
+          <button class="reward" id="adGo">Watch a video</button>
         </div>
       </div>
 
@@ -406,8 +429,10 @@ body.embed .buildpanel{
       </div>
 
       <div class="touch" id="touch">
-        <b class="l"><span>&larr;</span></b><b class="r"><span>&rarr;</span></b>
-        <b class="cc"><span>INV</span></b><b class="bb"><span>DSH</span></b><b class="a"><span>JMP</span></b>
+        <button class="l" type="button" aria-label="Move left"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4 8 12l7 8"/></svg></button>
+        <button class="r" type="button" aria-label="Move right"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l7 8-7 8"/></svg></button>
+        <button class="bb" type="button" aria-label="Dash"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5l7 7-7 7M13 5l7 7-7 7"/></svg></button>
+        <button class="a" type="button" aria-label="Jump"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11l7-7 7 7M5 20l7-7 7 7"/></svg></button>
       </div>
     </div>
   </div>
@@ -1671,55 +1696,75 @@ const SFX={
 };
 
 /* --------------------------- host bridge -----------------------------
-   Poki's SDK when it is there, no-ops when it is not.  The artifact and
-   Pages builds load no external script at all, and an ad blocker on Poki
-   just means these all fall through — the game never gates on them.
+   Poki's SDK when it is there, no-ops when it is not. The artifact and Pages
+   builds load no external script at all.
+
+   Frequency is Poki's to decide, not ours: commercialBreak() is requested at
+   every clean sheet transition and their capping decides whether one runs.
+   A break is only ever requested when the destination is gameplay, never on
+   the way to a menu or an interlude.
+
+   While a break is on screen the game is frozen, muted, and takes no input,
+   and gameplayStart() cannot fire before gameLoadingFinished() has gone out.
    -------------------------------------------------------------------- */
+const POKI_BUILD=false;                 /* tools/build-poki.js flips this */
 const ADS={
-  ready:false, playing:false,
-  /* --- pacing ----------------------------------------------------------
-     Poki rate-limits commercialBreak() on their side; this is our own floor
-     underneath it. Only time actually spent playing counts, the break is only
-     ever requested at the moment a sheet is finished, and it lands before an
-     interlude rather than cutting into one. Nothing is gated on it: if the
-     request is refused or the SDK is absent the game carries straight on.
-     -------------------------------------------------------------------- */
-  clock:0, gap:6*60*1000,
-  tick(ms){ ADS.clock=Math.min(ADS.gap*4, ADS.clock+ms); },
-  due(){ return ADS.clock>=ADS.gap; },
+  ready:false, playing:false, announced:false, inAd:false,
   init(){
     if(!window.PokiSDK) return Promise.resolve();
-    return PokiSDK.init().then(()=>{ ADS.ready=true; }).catch(()=>{});
+    /* never hang the game on the SDK — if init does not settle, start anyway */
+    return Promise.race([
+      PokiSDK.init().then(()=>{ ADS.ready=true; }).catch(()=>{}),
+      new Promise(r=>setTimeout(r, 8000))
+    ]);
   },
-  loaded(){ try{ window.PokiSDK && PokiSDK.gameLoadingFinished(); }catch(e){} },
-  playStart(){ if(ADS.playing) return; ADS.playing=true;
-    try{ window.PokiSDK && PokiSDK.gameplayStart(); }catch(e){} },
-  playStop(){ if(!ADS.playing) return; ADS.playing=false;
-    try{ window.PokiSDK && PokiSDK.gameplayStop(); }catch(e){} },
+  loaded(){
+    ADS.announced=true;
+    try{ window.PokiSDK && PokiSDK.gameLoadingFinished(); }catch(e){}
+  },
+  playStart(){
+    if(ADS.playing || ADS.inAd || !ADS.announced) return;
+    ADS.playing=true;
+    try{ window.PokiSDK && PokiSDK.gameplayStart(); }catch(e){}
+  },
+  playStop(){
+    if(!ADS.playing) return; ADS.playing=false;
+    try{ window.PokiSDK && PokiSDK.gameplayStop(); }catch(e){}
+  },
+  lock(on){
+    ADS.inAd=on;
+    try{ document.body.classList.toggle('adlock', on); }catch(e){}
+    if(on){ A.on=false; clearInput(); }
+  },
   break(then){
-    ADS.clock=0;
+    ADS.playStop();                      /* gameplayStop always precedes an ad */
     if(!window.PokiSDK){ then(); return; }
     const wasOn=A.on;
+    const done=()=>{ ADS.lock(false); A.on=wasOn; clearInput(); then(); };
     try{
-      PokiSDK.commercialBreak(()=>{ A.on=false; })
-        .then(()=>{ A.on=wasOn; then(); })
-        .catch(()=>{ A.on=wasOn; then(); });
-    }catch(e){ A.on=wasOn; then(); }
+      PokiSDK.commercialBreak(()=>ADS.lock(true)).then(done).catch(done);
+    }catch(e){ done(); }
   },
   rewarded(then){
-    if(!window.PokiSDK){ then(true); return; }
+    ADS.playStop();
+    if(!window.PokiSDK){
+      /* No SDK at all. In the artifact and Pages builds there is no ad economy
+         to protect, so the unlock is simply granted. In the Poki build the SDK
+         is the only way to earn one — a blocked ad must not pay out. */
+      then(!POKI_BUILD); return;
+    }
     const wasOn=A.on;
+    const done=ok=>{ ADS.lock(false); A.on=wasOn; clearInput(); then(ok); };
     try{
-      PokiSDK.rewardedBreak({size:'medium', onStart:()=>{ A.on=false; }})
-        .then(ok=>{ A.on=wasOn; then(!!ok); })
-        .catch(()=>{ A.on=wasOn; then(false); });
-    }catch(e){ A.on=wasOn; then(false); }
+      PokiSDK.rewardedBreak({size:'medium', onStart:()=>ADS.lock(true)})
+        .then(ok=>done(!!ok)).catch(()=>done(false));
+    }catch(e){ done(false); }
   }
 };
 
 /* ------------------------------ save -------------------------------- */
 const SKEY='constraint.save.v1';
-let SAVE={unlocked:1, best:{}, parts:{}, skipped:{}, cuts:{}, rank:0, daily:null, ghosts:{}, dev:0, mute:false, unl:null};
+let SAVE=null;
 /* Whatever comes back out of localStorage is treated as hostile: it is the one
    input to this game that another script on the origin could have written, and
    half of it is concatenated into the sheet list as markup. Object.assign is
@@ -1752,6 +1797,11 @@ function flagMap(o){
     for(const k of Object.keys(o)) if(k!=='__proto__' && o[k]) out[k]=1;
   return out;
 }
+/* Read again once the SDK has initialised: on Poki a signed-in player's cloud
+   save is written into localStorage during init(), so the first read can be
+   the stale local copy. */
+function loadSave(){
+SAVE={unlocked:1, best:{}, parts:{}, skipped:{}, cuts:{}, rank:0, daily:null, ghosts:{}, dev:0, mute:false, unl:null};
 try{
   const r=localStorage.getItem(SKEY);
   if(r){
@@ -1782,17 +1832,18 @@ if(!SAVE.daily || typeof SAVE.daily!=='object' || Array.isArray(SAVE.daily)) SAV
 SAVE.unl = (SAVE.unl && typeof SAVE.unl==='object' && !Array.isArray(SAVE.unl)) ? SAVE.unl : {};
 SAVE.unl.th=flagMap(SAVE.unl.th); SAVE.unl.wr=flagMap(SAVE.unl.wr);
 A.on=!SAVE.mute;
+}
+loadSave();
 function save(){ try{ localStorage.setItem(SKEY,JSON.stringify(SAVE)); }catch(e){} }
 
 /* ------------------------------ input ------------------------------- */
-const IN={l:0,r:0,u:0,d:0,jumpHeld:0,jumpBuf:-99,dashP:0,invP:0};
+const IN={l:0,r:0,u:0,d:0,jumpHeld:0,jumpBuf:-99,dashP:0};
 const HELD={};
 const MAP={
   ArrowLeft:'l', KeyA:'l', ArrowRight:'r', KeyD:'r',
   ArrowUp:'u', KeyW:'u', ArrowDown:'d', KeyS:'d',
   Space:'jump', KeyZ:'jump',
-  ShiftLeft:'dash', ShiftRight:'dash', KeyX:'dash',
-  KeyE:'inv', KeyC:'inv'
+  ShiftLeft:'dash', ShiftRight:'dash', KeyX:'dash'
 };
 function down(a){
   if(a==='l')IN.l=1; else if(a==='r')IN.r=1; else if(a==='u'){IN.u=1; press('jump');}
@@ -1809,9 +1860,9 @@ function cutJump(){
 function press(a){
   if(a==='jump'){ IN.jumpHeld=1; IN.jumpBuf=G.tick; }
   else if(a==='dash') IN.dashP=1;
-  else if(a==='inv') IN.invP=1;
 }
 addEventListener('keydown',e=>{
+  if(ADS.inAd){ e.preventDefault(); return; }
   const tag=e.target&&e.target.tagName;
   if(tag==='INPUT'||tag==='TEXTAREA') return;
   if(e.repeat) return;
@@ -1833,11 +1884,21 @@ addEventListener('keydown',e=>{
   else if((e.code==='Enter'||e.code==='Space')&&G.state==='done'){ e.preventDefault(); nextLevel(); }
 });
 addEventListener('keyup',e=>{
+  if(ADS.inAd){ e.preventDefault(); return; }
   const tag=e.target&&e.target.tagName;
   if(tag==='INPUT'||tag==='TEXTAREA') return;
   const a=MAP[e.code]; if(a){ HELD[e.code]=0; up(a); }
 });
-addEventListener('blur',()=>{ IN.l=IN.r=IN.u=IN.d=IN.jumpHeld=0; });
+function clearInput(){ IN.l=IN.r=IN.u=IN.d=IN.jumpHeld=0; IN.dashP=0; IN.jumpBuf=-99; }
+addEventListener('blur',clearInput);
+/* a hidden tab is not gameplay: stop the session rather than leave it open */
+addEventListener('visibilitychange',()=>{
+  if(document.hidden){
+    if(G.state==='play') togglePause();
+    ADS.playStop(); clearInput();
+  }
+});
+addEventListener('pagehide',()=>{ ADS.playStop(); clearInput(); });
 
 /* ------------------------------ state ------------------------------- */
 const G={
@@ -2581,7 +2642,7 @@ function step(){
     } else win();
   }
 
-  IN.dashP=0; IN.invP=0;
+  IN.dashP=0;
 }
 
 function stepWeather(){
@@ -3100,6 +3161,9 @@ const C={ink:'#0A0F16',grid:'#131D28',major:'#1D2C3C',line:'#5E8FB5',dim:'#3A5A7
  fill:'#16222E',accent:'#FF7A2F',haz:'#FF3B57',datum:'#3FDCA0',amber:'#FFC94D',
  cyan:'#4CC9E8',text:'#C6D8E6',faint:'#4E6376',mirror:'#A78BFA'};
 
+/* the CSS rule only reaches CSS animation; the screen shake is canvas */
+const REDUCED=(()=>{ try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }
+                     catch(e){ return false; } })();
 const cv=document.getElementById('c'), ctx=cv.getContext('2d');
 function fit(){ const s=Math.min(2,window.devicePixelRatio||1); cv.width=VW*s; cv.height=VH*s; ctx.setTransform(s,0,0,s,0,0); }
 fit(); addEventListener('resize',fit);
@@ -3658,7 +3722,7 @@ function draw(){
   if(G.state==='edit'){ drawEditor(); return; }
   const cam=Math.round(G.cam);
   ctx.save();
-  if(G.shake>0.3){ ctx.translate((Math.random()-.5)*G.shake,(Math.random()-.5)*G.shake); }
+  if(G.shake>0.3 && !REDUCED){ ctx.translate((Math.random()-.5)*G.shake,(Math.random()-.5)*G.shake); }
   ctx.translate(-cam,0);
   const osScene = G.state==='cut' && G.cutScene===4;
   if(!osScene) drawGrid(cam);
@@ -4108,7 +4172,7 @@ function setRankTag(){
 
 /* -------------------------------- UI -------------------------------- */
 const $=id=>document.getElementById(id);
-const OVS=['ovMenu','ovLevels','ovHow','ovPause','ovDone','ovRank','ovAd'];
+const OVS=['ovBoot','ovMenu','ovLevels','ovHow','ovPause','ovDone','ovRank','ovAd'];
 function showOv(id){ OVS.forEach(o=>$(o).classList.toggle('on',o===id)); }
 function fmt(t){ return t.toFixed(2); }
 function syncHud(){
@@ -4143,21 +4207,27 @@ function skipLevel(){
 }
 function nextLevel(){
   if(G.state!=='done') return;
-  /* the sheet is finished and nothing else is on screen yet: the only moment
-     a full-screen break is allowed, and only once the play clock has run past
-     the gap. Under the gap you simply get the next sheet. Builder test runs
-     never count — that loop is a workflow, not a session. */
-  if(!nextLevel._shown && G.lvl!==-1 && ADS.due()){
+  /* Work out where this goes before asking for anything. A commercial break is
+     only allowed when the player is walking straight back into gameplay: never
+     on the way to a menu, a daily summary, the builder, or an interlude. How
+     often one actually runs is Poki's decision, not ours — there is no timer
+     of our own here. */
+  let dest, playable=false;
+  if(G.lvl===-2)   dest=()=>{ G.state='menu'; showOv('ovMenu'); };
+  else if(G.lvl<0) dest=()=>openBuild();
+  else {
+    const gate={39:1, 79:2, 103:3, 127:4, 151:5, 152:6}[G.lvl];
+    if(gate && !(SAVE.cuts&&SAVE.cuts[gate])) dest=()=>startCut(gate);
+    else if(G.lvl+1<LEVELS.length){ const n=G.lvl+1; dest=()=>play(n); playable=true; }
+    else dest=()=>{ showOv('ovMenu'); G.state='menu'; buildPicker(); };
+  }
+  if(playable && !nextLevel._shown){
     nextLevel._shown=true;
     ADS.break(()=>nextLevel());
     return;
   }
   nextLevel._shown=false;
-  if(G.lvl===-2){ G.state='menu'; showOv('ovMenu'); return; }
-  if(G.lvl<0){ openBuild(); return; }
-  const gate={39:1, 79:2, 103:3, 127:4, 151:5, 152:6}[G.lvl];
-  if(gate && !(SAVE.cuts&&SAVE.cuts[gate])){ startCut(gate); return; }
-  if(G.lvl+1<LEVELS.length) play(G.lvl+1); else { showOv('ovMenu'); G.state='menu'; buildPicker(); }
+  dest();
 }
 function showDone(isBest){
   const i=G.lvl;
@@ -4268,9 +4338,10 @@ function buildPicker(){
   });
 }
 /* The builder used to open only after all 600 sheets, which on a build with
-   no dev code meant it never opened at all. Ten sheets is enough to have met
-   the pieces you are about to paint with. One number, easy to move. */
-const BUILD_AT=10;
+   no dev code meant it never opened at all. It is open from the start now:
+   a reviewer has minutes, not hours, and the remix and theme unlocks are
+   worth nothing behind a door nobody reaches. One number, easy to move. */
+const BUILD_AT=1;
 function buildUnlocked(){ return SAVE.dev || SAVE.unlocked>=BUILD_AT; }
 
 /* ------------------------- optional unlocks --------------------------
@@ -4291,7 +4362,10 @@ function askAd(kind, text, sub, grant, done){
   $('adKind').textContent=kind;
   $('adText').textContent=text;
   $('adSub').textContent=sub||'';
-  $('adGo').textContent = window.PokiSDK ? 'Watch a video' : 'Unlock';
+  $('adGo').innerHTML = POKI_BUILD
+    ? '<span class="adtag">\ud83c\udfac</span> Watch a video'
+    : 'Unlock';
+  $('adGo').classList.toggle('reward', POKI_BUILD);
   showOv('ovAd');
 }
 $('adGo').onclick=()=>{
@@ -4551,7 +4625,7 @@ $('bLoad').onclick=()=>{ const c=(SAVE.builds||{})[ED.slot];
   if(!c) return bMsg('slot '+ED.slot+' is empty', true);
   const d=decodeGrid(c); if(!d) return bMsg('slot '+ED.slot+' is corrupt', true);
   ED.grid=d.g; ED.cols=d.cols; takeTheme(d.theme); paintPalette(); bMsg('loaded slot '+ED.slot); };
-$('bClear').onclick=()=>{ ED.grid=blankGrid(ED.cols); bMsg('cleared'); };
+arm($('bClear'), 'Clear — sure?', ()=>{ ED.grid=blankGrid(ED.cols); bMsg('cleared'); });
 $('bCompile').onclick=()=>{ const c=encodeGrid(ED.grid,ED.cols,ED.theme);
   $('bCode').value=c; $('bCode').select(); bMsg('code ready — '+c.length+' characters, copy it'); };
 $('bPaste').onclick=()=>{ const d=decodeGrid($('bCode').value);
@@ -4568,7 +4642,7 @@ function takeTheme(k){
   ED.theme=k; paintThemes(); return true;
 }
 $('bTest').onclick=()=>{ $('buildPanel').classList.remove('on'); G.state='play'; showOv(null); loadCustom(ED.grid,ED.cols); ac(); };
-cv.addEventListener('pointerdown',e=>{ if(G.state!=='edit') return; ED.painting=true; edPaint(e); });
+cv.addEventListener('pointerdown',e=>{ if(G.state!=='edit'||ADS.inAd) return; ED.painting=true; edPaint(e); });
 cv.addEventListener('pointermove',e=>{ if(G.state==='edit'&&ED.painting) edPaint(e); });
 addEventListener('pointerup',()=>{ ED.painting=false; });
 $('btnPlay').onclick=()=>play(Math.min(SAVE.unlocked-1,LEVELS.length-1));
@@ -4643,7 +4717,23 @@ if($('devCode')) $('devCode').addEventListener('keydown',e=>{
   if(e.key==='Enter'){ e.preventDefault(); tryCode(); }
 });
 setDevTag();
-$('btnWipe').onclick=()=>{
+/* Two clicks for anything that cannot be undone. The button arms itself, says
+   so, and disarms again after four seconds if you walk away from it. */
+function arm(btn, label, act){
+  btn.onclick=()=>{
+    if(btn._armed){
+      clearTimeout(btn._t); btn._armed=false;
+      btn.textContent=btn._was; btn.classList.remove('warn');
+      act(); return;
+    }
+    btn._armed=true; btn._was=btn.textContent;
+    btn.textContent=label; btn.classList.add('warn');
+    clearTimeout(btn._t);
+    btn._t=setTimeout(()=>{ btn._armed=false; btn.textContent=btn._was;
+                            btn.classList.remove('warn'); }, 4000);
+  };
+}
+arm($('btnWipe'), 'Erase — sure?', ()=>{
   /* themes and remix sets were paid for with a video, so they are kept:
      they are entitlements, not progress. Without carrying SAVE.unl across,
      the next call into the builder walks off the end of an undefined. */
@@ -4651,7 +4741,7 @@ $('btnWipe').onclick=()=>{
         dev:0,mute:SAVE.mute,unl:SAVE.unl};
   SAVE.unl=SAVE.unl||{}; SAVE.unl.th=SAVE.unl.th||{}; SAVE.unl.wr=SAVE.unl.wr||{};
   save(); buildPicker(); setDevTag();
-};
+});
 $('sheetCount').textContent=(SAVE.unlocked>40?LEVELS.length+' sheets · 5 acts':'40 sheets · 5 constraints');
 $('btnPlay').textContent = SAVE.unlocked>1 ? 'Continue' : 'Start';
 
@@ -4667,11 +4757,11 @@ cv.addEventListener('pointerdown',()=>{
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 if(matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window)){
   $('touch').classList.add('on');
-  const bs=$('touch').querySelectorAll('b');
-  const acts=['l','r','inv','dash','jump'];
+  const bs=$('touch').querySelectorAll('button');
+  const acts=['l','r','dash','jump'];
   bs.forEach((b,i)=>{
     const a=acts[i];
-    const on=e=>{ e.preventDefault(); b.classList.add('act'); down(a); ac(); };
+    const on=e=>{ e.preventDefault(); if(ADS.inAd) return; b.classList.add('act'); down(a); ac(); };
     const off=e=>{ e.preventDefault(); b.classList.remove('act'); up(a); };
     b.addEventListener('pointerdown',on); b.addEventListener('pointerup',off);
     b.addEventListener('pointercancel',off); b.addEventListener('pointerleave',off);
@@ -4684,18 +4774,36 @@ function loop(ts){
   requestAnimationFrame(loop);
   /* gameplayStart / gameplayStop follow G.state and nothing else, so every
      route in and out of play is covered exactly once and never twice */
-  const live = (G.state==='play');
+  const live = (G.state==='play' && !ADS.inAd);
   if(live!==ADS.playing){ live ? ADS.playStart() : ADS.playStop(); }
-  const dt=Math.min(60,ts-last); last=ts; acc+=dt;
-  if(live) ADS.tick(dt);
+  const dt=Math.min(60,ts-last); last=ts;
+  if(ADS.inAd){ acc=0; draw(); return; }   /* frozen while a break is on screen */
+  acc+=dt;
   let n=0;
   while(acc>=16.6667 && n++<4){ step(); acc-=16.6667; }
   if(G.state==='play') { $('hudTime').textContent=fmt(G.time); }
   draw();
 }
+/* Startup order matters to Poki: gameLoadingFinished() has to go out before
+   anything can reach gameplay, so the menu stays behind a loading panel until
+   init() settles. It always settles — ADS.init races an eight second timeout,
+   so a blocked or slow SDK cannot strand the player on this screen. */
+function refreshMenu(){
+  buildPicker(); setDevTag(); setStreakTag(); setRankTag();
+  $('sheetCount').textContent=(SAVE.unlocked>40?LEVELS.length+' sheets · 5 acts':'40 sheets · 5 constraints');
+  $('btnPlay').textContent = SAVE.unlocked>1 ? 'Continue' : 'Start';
+}
 loadLevel(Math.min(SAVE.unlocked-1,LEVELS.length-1));
-G.state='menu'; buildPicker();
-ADS.init().then(()=>{ ADS.loaded();
-  if(window.PokiSDK) $('btnSkip').textContent='Skip sheet \u25b8 watch a video'; });
+G.state='boot'; showOv('ovBoot');
 requestAnimationFrame(loop);
+ADS.init().then(()=>{
+  ADS.loaded();
+  loadSave();                       /* the cloud save may have landed during init */
+  loadLevel(Math.min(SAVE.unlocked-1,LEVELS.length-1));
+  G.state='menu'; refreshMenu(); showOv('ovMenu');
+});
+if(POKI_BUILD){
+  $('btnSkip').innerHTML='<span class="adtag">\ud83c\udfac</span> Skip sheet';
+  $('btnSkip').classList.add('reward');
+}
 </script>
