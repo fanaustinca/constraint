@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="A precision platformer rendered as a CAD sketch. 153 sheets, six acts.">
 <title>CONSTRAINT — a precision platformer</title>
-<style>*{margin:0;padding:0}</style>
+<style>*{margin:0;padding:0}html,body{height:100%}</style>
+<script src="https://game-cdn.poki.com/scripts/v2/poki-sdk.js"></script>
 </head>
-<body>
+<body class="embed">
 <style>
 :root{
   --ink:#0A0F16; --sheet:#0D141D; --panel:#141F2B; --panel2:#18242F;
@@ -1761,7 +1761,7 @@ const SFX={
    While a break is on screen the game is frozen, muted, and takes no input,
    and gameplayStart() cannot fire before gameLoadingFinished() has gone out.
    -------------------------------------------------------------------- */
-const POKI_BUILD=false;                 /* tools/build-poki.js flips this */
+const POKI_BUILD=true;                 /* tools/build-poki.js flips this */
 const ADS={
   ready:false, playing:false, announced:false, inAd:false,
   absent:false, failed:false, ready:false,

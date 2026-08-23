@@ -54,9 +54,10 @@ never walks the same path. They never advance story progression.
 ## Layout
 
 `game.html` is the source of truth — it has no `<!doctype>` or `<head>` because the Claude
-artifact platform supplies those. `index.html` is generated from it by `tools/build.js`, which
-adds the document shell, charset and viewport meta that standalone hosting needs. **Edit
-`game.html`, never `index.html`.**
+artifact platform supplies those. `index.html` and `poki/index.html` are both generated from
+it, and are **byte-identical**: the build GitHub Pages serves is the build submitted to Poki,
+SDK and all. Testing something other than what you ship is how a problem stays hidden until
+the reviewer finds it. **Edit `game.html`, never the generated files.**
 
 ```bash
 node tools/build.js     # game.html -> index.html   (run before every commit)
@@ -175,16 +176,26 @@ wait behind it. The ranking test never shows one, because it is meant to be met 
 
 ## Builds
 
-Three targets come out of the one source:
+Two targets come out of the one source, from one generator in `tools/pokihtml.js`
+so they cannot drift apart:
 
 ```bash
 node tools/build.js       # game.html -> index.html      (GitHub Pages)
-node tools/build-poki.js  # game.html -> poki/index.html (Poki submission)
+node tools/build-poki.js  # game.html -> poki/index.html (upload this folder)
 ```
 
-`index.html` is the Pages build: document shell added, dev code and the rev-code box
-stripped, zero external requests. `poki/index.html` adds Poki's SDK and a full-screen embed
-layout, and is the only build that loads anything from another origin.
+Both are the Poki build: document shell added, dev code and the rev-code box stripped,
+Poki's SDK loaded, full-screen embed layout. They are the only builds that request anything
+from another origin, and `cmp index.html poki/index.html` must report no difference.
+
+The Claude artifact runs `game.html` directly, so it is the one place the game exists with
+`POKI_BUILD=false` — no SDK, no ad economy, and the optional unlocks simply granted.
+
+In the Poki build every SDK milestone is stamped to the browser console with a timing —
+SDK found, `init()` called, resolved or rejected, `gameLoadingFinished()`, `gameplayStart()`,
+`gameplayStop()`. Poki's `poki-sdk.js` is only a stub that queues calls until a second script,
+`poki-sdk-core-*.js`, loads and drains the queue, so a call that was made but never ran is
+otherwise indistinguishable from one that was never made.
 
 Ad handling follows Poki's lifecycle rules rather than any schedule of our own:
 
