@@ -1990,18 +1990,45 @@ function buildPieces(){
       x=x2+1;
     }
   }
+  /* A platform is an object with a path, not a tile — applyDrift() and the
+     builder both lift them out of the grid before this sweep runs, so the
+     cursor slid straight past every moving and unstable platform on the sheet.
+     Order them by the middle of the run they sweep, which is where the front
+     draws level with them. */
+  G.movers.forEach((m,i)=>{
+    const x0=Math.min(m.ax,m.bx), x1=Math.max(m.ax,m.bx)+m.w;
+    const y0=Math.min(m.ay,m.by), y1=Math.max(m.ay,m.by)+m.h;
+    G.pieces.push({mv:i, x:Math.floor((x0+x1)/2/TS), y:Math.floor(y0/TS),
+                   y2:Math.max(0,Math.ceil(y1/TS)-1), len:Math.max(1,Math.round(m.w/TS)), gone:0});
+  });
   G.pieces.sort((a,b)=>a.x-b.x || a.y-b.y);
+}
+/* where a piece is right now — a platform has moved since the sweep ran */
+function pieceBox(p){
+  if(p.mv!==undefined){ const m=G.movers[p.mv];
+    if(m) return {x:m.x, y:m.y, w:m.w, h:m.h}; }
+  return {x:p.x*TS, y:p.y*TS, w:p.len*TS, h:(p.y2-p.y+1)*TS};
+}
+function killPiece(p){
+  if(p.mv!==undefined){
+    const m=G.movers[p.mv]; if(!m) return;
+    m.eaten=1; m.dx=0; m.dy=0;
+    if(P.rideM===m) P.rideM=null;
+    return;
+  }
+  for(let yy=p.y;yy<=p.y2;yy++) for(let xx=p.x;xx<p.x+p.len;xx++) G.grid[yy][xx]='.';
 }
 function eaterReset(){
   const E=G.eater; if(!G.eatOn) return;
   G.grid=G.grid0.map(r=>r.slice());
+  for(const m of G.movers) m.eaten=0;
   E.front=P.x-300; E.st='idle'; E.t=0; E.tgt=null;
   E.cx=E.front-40; E.cy=VH*0.4;
   E.i=0;
   for(const p of G.pieces){ p.gone = (p.x*TS < E.front) ? 1 : 0; }
   for(const p of G.pieces){
     if(!p.gone) break;
-    for(let yy=p.y;yy<=p.y2;yy++) for(let xx=p.x;xx<p.x+p.len;xx++) G.grid[yy][xx]='.';
+    killPiece(p);
     E.i++;
   }
 }
@@ -2021,17 +2048,17 @@ function stepEater(){
   }
   else if(E.st==='seek'){
     E.t++;
-    const p=E.tgt, u=Math.min(1,E.t/T1);
-    E.cx=ease(E.sx,(p.x+p.len/2)*TS,u); E.cy=ease(E.sy,p.y*TS+TS/2,u);
+    const p=E.tgt, b=pieceBox(p), u=Math.min(1,E.t/T1);
+    E.cx=ease(E.sx,b.x+b.w/2,u); E.cy=ease(E.sy,b.y+b.h/2,u);
     if(E.t>=T1){ E.st='menu'; E.t=0; snd(900,700,0.04,0.05,'square'); }
   }
   else if(E.st==='menu'){
     E.t++;
     if(E.t>=T2){
-      const p=E.tgt; p.gone=1;
-      for(let yy=p.y;yy<=p.y2;yy++) for(let xx=p.x;xx<p.x+p.len;xx++) G.grid[yy][xx]='.';
+      const p=E.tgt, bx=pieceBox(p); p.gone=1;
+      killPiece(p);
       for(let q=0;q<10+p.len*5;q++){
-        G.fx.push({x:(p.x+Math.random()*p.len)*TS, y:(p.y+Math.random()*(p.y2-p.y+1))*TS,
+        G.fx.push({x:bx.x+Math.random()*bx.w, y:bx.y+Math.random()*bx.h,
           vx:(Math.random()-.5)*3.4, vy:(Math.random()-.5)*3.4-0.6,
           life:26+Math.random()*22, sz:1.4+Math.random()*1.4,
           c: Math.random()<0.5?'#FF7A2F':'#5E8FB5'});
@@ -2046,7 +2073,7 @@ function drawEater(){
   const E=G.eater; if(!G.eatOn) return;
   /* selection + right-click menu on the doomed piece */
   if(E.st==='menu' && E.tgt){
-    const p=E.tgt, x=p.x*TS, y=p.y*TS, w=p.len*TS, h=(p.y2-p.y+1)*TS;
+    const p=E.tgt, b=pieceBox(p), x=b.x, y=b.y, w=b.w, h=b.h;
     const flash=E.t>(E.t>0?0:0) && (E.t%8<4);
     ctx.fillStyle='rgba(255,122,47,'+(0.14+(flash?0.10:0))+')'; ctx.fillRect(x,y,w,h);
     ctx.strokeStyle=C.accent; ctx.lineWidth=1;
@@ -2330,6 +2357,7 @@ function loadLevel(i){
   if(MOD.drift) applyDrift(MOD.drift);
   else if(MOD.chaos) applyDrift(0.9);
   G.driftK=MOD.drift||1;
+  for(const m of G.movers) m.eaten=0;
   if(MOD.chaos) for(const m of G.movers) if(m.loose) m.faller=1;
   G.rmode=MOD.render||'normal'; G.allParts=!!MOD.allparts;
   G.chaos=MOD.chaos||0; G.chaosT=200; G.gscale=MOD.gravity||1; G.ascale=MOD.accel||1; G.portLock=0; G.weather=MOD.weather||null; G.snowfall=null; G.cold=MOD.cold||0;
@@ -2427,7 +2455,7 @@ function moveXStep(dx){
   if(dx===0) return;
   const pr={x:P.x,y:P.y,w:PW,h:PH};
   for(const m of G.movers){
-    if(m.gone || !overlap(pr,m)) continue;
+    if(m.gone || m.eaten || !overlap(pr,m)) continue;
     const lf=m.x-PW-0.01, rt=m.x+m.w+0.01;
     let side = dx>0 ? -1 : dx<0 ? 1
              : ((P.x+PW)-m.x < (m.x+m.w)-P.x ? -1 : 1);   /* -1 leaves left, +1 leaves right */
@@ -2462,7 +2490,7 @@ function moveYStep(dy){
   let rideHit=null;
   const pr={x:P.x,y:P.y,w:PW,h:PH};
   for(const m of G.movers){
-    if(m.gone || !overlap(pr,m)) continue;
+    if(m.gone || m.eaten || !overlap(pr,m)) continue;
     /* Only land on it if you came from above, only bonk if you came from below —
        otherwise the platform moved into you and there is no side you came from,
        so leave by the shorter route. Whichever route we pick it has to be open:
@@ -2614,6 +2642,7 @@ function step(){
 
   /* movers */
   for(const m of G.movers){
+    if(m.eaten){ m.dx=0; m.dy=0; continue; }      /* the cursor deleted it */
     if(m.faller && m.gone){
       if(--m.respawn<=0){ m.gone=0; m.dropY=0; m.hold=0; m.drop=0; m.dv=0; }
       else { m.x=-99999; m.y=-99999; m.dx=0; m.dy=0; continue; }
@@ -2961,7 +2990,9 @@ function win(){
   const isBest = !SAVE.best[i] || t<SAVE.best[i];
   if(isBest) SAVE.best[i]=t;
   SAVE.parts[i]=Math.max(SAVE.parts[i]||0, G.parts);
-  SAVE.unlocked=Math.max(SAVE.unlocked, Math.min(LEVELS.length, i+2));
+  /* Clearing a taster must not unlock the road you skipped to reach it: sheet
+     314 is the first Code sheet, and i+2 there would open all of acts I to VIII. */
+  if(i+1<=SAVE.unlocked) SAVE.unlocked=Math.max(SAVE.unlocked, Math.min(LEVELS.length, i+2));
   save();
   showDone(isBest);
 }
@@ -3756,7 +3787,7 @@ function drawGlitch(cam){
 }
 function drawMovers(){
   for(const m of G.movers){
-    if(m.gone) continue;
+    if(m.gone || m.eaten) continue;
     ctx.strokeStyle='rgba(94,143,181,.22)'; ctx.lineWidth=1; dash(true);
     ctx.beginPath(); ctx.moveTo(m.ax+m.w/2,m.ay+m.h/2); ctx.lineTo(m.bx+m.w/2,m.by+m.h/2); ctx.stroke(); dash(false);
     if(G.rmode==='code'){
@@ -4214,6 +4245,7 @@ function loadCustom(g,cols){
   if(MOD.winter) winterize(false);
   if(MOD.drift) applyDrift(MOD.drift); else if(MOD.chaos) applyDrift(0.9);
   G.driftK=MOD.drift||1;
+  for(const m of G.movers) m.eaten=0;
   if(MOD.chaos) for(const m of G.movers) if(m.loose) m.faller=1;
   G.grid0=G.grid.map(r=>r.slice());
   G.partsTotal=G.gems.length; G.parts=0; G.deaths=0; G.time=0; G.won=0; G.banner=110;
@@ -4604,10 +4636,10 @@ function togglePause(){
 function skipLevel(){
   if(G.lvl<0) return;                 /* there is nothing to skip to from those */
   SAVE.skipped[G.lvl]=1;
-  SAVE.unlocked=Math.max(SAVE.unlocked, Math.min(LEVELS.length, G.lvl+2));
+  if(G.lvl+1<=SAVE.unlocked) SAVE.unlocked=Math.max(SAVE.unlocked, Math.min(LEVELS.length, G.lvl+2));
   save();
-  if(G.lvl+1<LEVELS.length) play(G.lvl+1);
-  else { G.state='menu'; buildPicker(); showOv('ovMenu'); }
+  if(G.lvl+1<LEVELS.length && sheetOpen(G.lvl+1)) play(G.lvl+1);
+  else { G.state='menu'; buildPicker(); showOv('ovLevels'); }
 }
 function nextLevel(){
   if(G.state!=='done') return;
@@ -4622,7 +4654,8 @@ function nextLevel(){
   else {
     const gate={39:1, 79:2, 103:3, 127:4, 151:5, 152:6}[G.lvl];
     if(gate && !(SAVE.cuts&&SAVE.cuts[gate])) dest=()=>startCut(gate);
-    else if(G.lvl+1<LEVELS.length){ const n=G.lvl+1; dest=()=>play(n); playable=true; }
+    else if(G.lvl+1<LEVELS.length && sheetOpen(G.lvl+1)){ const n=G.lvl+1; dest=()=>play(n); playable=true; }
+    else if(G.lvl+1<LEVELS.length){ dest=()=>{ showOv('ovLevels'); G.state='menu'; buildPicker(); }; }
     else dest=()=>{ showOv('ovMenu'); G.state='menu'; buildPicker(); };
   }
   if(playable && !nextLevel._shown){
@@ -4657,6 +4690,20 @@ function showDone(isBest){
   showOv('ovDone');
 }
 const OPEN=new Set();
+/* One sheet from each side world is open from the very start. The acts are a
+   long road, and someone who wants to see what Space or Code actually is should
+   not have to walk all of it first. A taster grants no progress of its own —
+   see win() — so playing one cannot unlock the game around it. */
+let _tasters=null;
+function tasters(){
+  if(_tasters) return _tasters;
+  const first={};
+  LEVELS.forEach((L,i)=>{ const a=(WORLDS[L.w]||{}).act||1;
+    if(a>=7 && a<=11 && first[a]===undefined) first[a]=i; });
+  _tasters=new Set(Object.keys(first).map(k=>first[k]));
+  return _tasters;
+}
+function sheetOpen(i){ return i+1<=SAVE.unlocked || tasters().has(i); }
 function buildPicker(){
   refreshBuildBtn();
   const p=$('picker'); p.innerHTML='';
@@ -4668,7 +4715,7 @@ function buildPicker(){
   const ACTSTART={1:0,2:40,3:80,4:104,5:128,6:152,7:153,8:233,9:313,10:393,11:473,12:0};
   const ACTNAME={1:'the basics',2:'revision b',3:'revision c',4:'revision d',5:'recovery',6:'authored'};
   const ROMAN={1:'I',2:'II',3:'III',4:'IV',5:'V',6:'VI'};
-  const THEME={7:'SPACE',8:'PORTALS',9:'CODE',10:'LIGHT',11:'WINTER',12:'TRIALS'};
+  const THEME={7:'SPACE',8:'PORTALS',9:'CODE',10:'WHITEOUT',11:'WINTER',12:'TRIALS'};
   const THEMESUB={7:'low gravity, long jumps',8:'two doors, one sheet',
                   9:'the sheet is its own source',10:'a white sheet, inverted',
                   11:'ice runs fast, snow drags',12:'47 sheets, easiest to hardest'};
@@ -4677,13 +4724,18 @@ function buildPicker(){
   WORLDS.forEach((w,wi)=>{
     const act=w.act||1;
     if(act===12 && !SAVE.dev) return;           /* no practising the ranking ladder */
-    if(SAVE.unlocked<=ACTSTART[act]) return;
+    const idx=LEVELS.map((l,i)=>[l,i]).filter(a=>a[0].w===wi);
+    if(!idx.length) return;
+    const reachable=idx.some(a=>sheetOpen(a[1]));
+    /* a side world appears as soon as anything in it can be played, which for
+       the first world of each type is immediately */
+    if(!reachable && SAVE.unlocked<=ACTSTART[act]) return;
     if(act!==curAct){
       curAct=act;
       if(act>=7 && !extraShown){
         extraShown=true;
         const x=document.createElement('div'); x.className='acthead extra';
-        x.innerHTML='<em>EXTRA WORLDS</em><i></i><span>side sheets</span>';
+        x.innerHTML='<em>EXTRA WORLDS</em><i></i><span>one sheet of each is open from the start</span>';
         p.appendChild(x);
       }
       const h=document.createElement('div'); h.className='acthead'+(act>=7?' theme':'');
@@ -4692,11 +4744,8 @@ function buildPicker(){
         : '<em>'+THEME[act]+'</em><i></i><span>'+THEMESUB[act]+'</span>';
       p.appendChild(h);
     }
-    const idx=LEVELS.map((l,i)=>[l,i]).filter(a=>a[0].w===wi);
-    if(!idx.length) return;
     const done=idx.filter(a=>SAVE.best[a[1]]!==undefined).length;
     const open=OPEN.has(wi);
-    const reachable=idx.some(a=>a[1]+1<=SAVE.unlocked);
     const sec=document.createElement('div'); sec.className='world';
     const head=document.createElement('button');
     /* in remix mode a set opens once, for a video — the sheets themselves
@@ -4721,7 +4770,7 @@ function buildPicker(){
       const cards=document.createElement('div'); cards.className='cards';
       idx.forEach(([L,i])=>{
         /* remixing a sheet means having beaten it, not merely reached it */
-        const lock=REMIX ? (SAVE.best[i]===undefined && !SAVE.skipped[i]) : (i+1>SAVE.unlocked);
+        const lock=REMIX ? (SAVE.best[i]===undefined && !SAVE.skipped[i]) : !sheetOpen(i);
         const b=document.createElement('button');
         b.className='card'+(lock?' lock':'')+(i===G.lvl?' cur':'');
         b.disabled=lock;

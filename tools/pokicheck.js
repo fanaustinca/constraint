@@ -119,11 +119,18 @@ setTimeout(()=>{
     /* with no SDK there is no break to request anywhere, which is the point */
     ok((asked()-before>0)===(want && isPoki), isPoki? label : label.replace(/-> .*/,'-> no SDK, no break'));
   };
-  probe("G.lvl=5",  'ordinary sheet -> break requested',            true);
+  /* reaching a sheet mid-run means having unlocked it — win() raises SAVE.unlocked
+     before the player ever gets to press Next, so the setup has to say so too */
+  probe("SAVE.unlocked=99; G.lvl=5",  'ordinary sheet -> break requested',       true);
   probe("G.lvl=-2", 'daily summary -> no break',                    false);
   probe("G.lvl=-1", 'builder test run -> no break',                 false);
-  probe("SAVE.cuts={}; G.lvl=39", 'before an interlude -> no break', false);
-  probe("G.lvl=LEVELS.length-1",  'last sheet, back to menu -> no break', false);
+  probe("SAVE.unlocked=99; SAVE.cuts={}; G.lvl=39", 'before an interlude -> no break', false);
+  probe("SAVE.unlocked=LEVELS.length; G.lvl=LEVELS.length-1",
+        'last sheet, back to menu -> no break', false);
+  /* a side-world taster is a dead end: it returns you to the sheet list, and a
+     break must never sit in front of a menu */
+  probe("SAVE.unlocked=1; G.lvl=Array.from(tasters()).sort((a,b)=>a-b)[0]",
+        'side-world taster, back to the list -> no break', false);
 
   if(isPoki){
     ok(idx('gameplayStop')>=0 && idx('gameplayStop')<calls.lastIndexOf('commercialBreak'),

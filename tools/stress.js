@@ -608,8 +608,15 @@ function phaseRespawn(){
           const keep={x:G.spawn.x,y:G.spawn.y};
           G.spawn={x:p.x,y:p.y}; respawn(true);
           IN.l=IN.r=IN.u=IN.d=0; IN.jumpHeld=0; IN.dashP=0;
+          /* Hold the chaos floor still for the window. The question here is
+             whether the spawn point itself is safe, and on a chaos sheet the
+             floor is meant to vanish out from under anyone standing on it —
+             letting it fire made this phase pass or fail on the seed rather
+             than on the sheet. */
+          const chaosKeep=G.chaos; G.chaos=0;
           let died=-1;
           for(let f=0;f<90;f++){ step(); if(P.dead){ died=f; break; } }
+          G.chaos=chaosKeep;
           G.spawn=keep;
           if(died>=0) return p.what+' kills you '+died+' frames after respawn (world warmed '+warm+' frames)';
         }
@@ -696,6 +703,60 @@ function phaseMarathon(){
     prev=m;
     ok('marathon','sheet '+i);
   }
+}
+
+/* ================= phase: tasters =================
+   One sheet of each side world is open from the start. The trap is that
+   clearing sheet 314 with the old rule set unlocked to 315, which would have
+   opened every act between it and the beginning. */
+function phaseTasters(){
+  head('tasters — a side world opens one sheet, and clearing it unlocks nothing else');
+  const T=run('Array.from(tasters()).sort((a,b)=>a-b)');
+  const acts=run('Array.from(tasters()).sort((a,b)=>a-b).map(i=>(WORLDS[LEVELS[i].w]||{}).act)');
+  if(T.length<4) bug('tasters','only '+T.length+' side worlds open a sheet');
+  else ok('tasters',T.length+' side worlds open a sheet');
+  if(new Set(acts).size!==acts.length) bug('tasters','two tasters come from the same world type');
+  else ok('tasters','one per world type');
+  /* fresh save: exactly sheet 1 and the tasters */
+  const open=run(`(()=>{ SAVE.unlocked=1; const a=[];
+    for(let i=0;i<LEVELS.length;i++) if(sheetOpen(i)) a.push(i); return a;})()`);
+  const want=[0].concat(T);
+  if(open.join()!==want.join()) bug('tasters','a fresh save opens '+open.length+' sheets, expected '+want.length+': '+open.join(','));
+  else ok('tasters','a fresh save opens sheet 1 and the tasters, nothing else');
+  /* clearing one grants no progress, but still records the time */
+  for(const t of T){
+    const r=run(`(()=>{ SAVE.unlocked=1; SAVE.best={}; SAVE.parts={}; SAVE.skipped={};
+      G.state='play'; loadLevel(${t}); G.time=9.5; G.won=0; win();
+      return {unlocked:SAVE.unlocked, best:SAVE.best[${t}]!==undefined, next:sheetOpen(${t}+1)};})()`);
+    if(r.unlocked!==1) bug('tasters','clearing sheet '+(t+1)+' unlocked '+r.unlocked+' sheets');
+    else if(!r.best)   bug('tasters','clearing sheet '+(t+1)+' did not record a time');
+    else if(r.next)    bug('tasters','clearing sheet '+(t+1)+' opened the sheet after it');
+    else ok('tasters','sheet '+(t+1)+' grants no progress');
+    const sk=run(`(()=>{ SAVE.unlocked=1; SAVE.skipped={};
+      G.state='play'; loadLevel(${t}); G.lvl=${t}; skipLevel();
+      return SAVE.unlocked;})()`);
+    if(sk!==1) bug('tasters','skipping sheet '+(t+1)+' unlocked '+sk+' sheets');
+    else ok('tasters','sheet '+(t+1)+' grants nothing on a skip');
+    /* and it must not drop you into the locked sheet behind it */
+    const nx=run(`(()=>{ SAVE.unlocked=1; SAVE.cuts={}; nextLevel._shown=false;
+      G.state='play'; loadLevel(${t}); G.lvl=${t}; G.state='done'; nextLevel();
+      nextLevel._shown=false; return {state:G.state, lvl:G.lvl};})()`);
+    if(nx.lvl!==t) bug('tasters','finishing sheet '+(t+1)+' carried you into sheet '+(nx.lvl+1));
+    else ok('tasters','sheet '+(t+1)+' returns you to the list');
+  }
+  /* normal progression is untouched */
+  const norm=run(`(()=>{ SAVE.unlocked=5; SAVE.best={};
+    G.state='play'; loadLevel(4); G.time=9.5; G.won=0; win(); return SAVE.unlocked;})()`);
+  if(norm!==6) bug('tasters','clearing sheet 5 normally left unlocked at '+norm+', expected 6');
+  else ok('tasters','normal progression still advances');
+  /* the picker survives every progress point */
+  let threw=0;
+  for(const u of [1,2,40,80,104,128,152,154,234,314,394,474,600]){
+    try{ run(`SAVE.unlocked=${u}; REMIX=false; buildPicker();`); ok('tasters','picker at '+u); }
+    catch(e){ threw++; bug('tasters','the picker throws at unlocked='+u+': '+e.message); }
+  }
+  run('SAVE.unlocked=1; SAVE.best={}; SAVE.parts={}; SAVE.skipped={};');
+  console.log('       tasters at sheets '+T.map(i=>i+1).join(', ')+(threw?'':' — picker clean at 13 progress points'));
 }
 
 /* ================= phase: render =================
@@ -841,7 +902,40 @@ function phaseEater(){
     return worst;})()`);
   if(pace>12) bug('eater','the cursor falls '+pace+' pieces behind its own front');
   else ok('eater','pacing');
-  console.log('       '+r.length+' eater sheets, '+total+' unreachable tiles, worst backlog '+pace+' pieces');
+  /* platforms are objects, not tiles: they have to be on the menu too */
+  const mv=run(`(()=>{ let sheets=0, movers=0, left=0, stuck=[];
+    for(let i=0;i<LEVELS.length;i++){ loadLevel(i); if(!G.eatOn || !G.movers.length) continue;
+      sheets++; movers+=G.movers.length; G.state='play'; P.dead=0;
+      for(let f=0;f<14000;f++){
+        P.x=Math.min(COLS*TS-40, G.eater.front+200);
+        for(const m of G.movers){ if(m.eaten) continue;
+          const len=Math.hypot(m.bx-m.ax,m.by-m.ay)||1;
+          m.u=(m.u===undefined?m.ph*2:m.u)+m.spd/len*2; const t=tri(m.u);
+          const nx=m.ax+(m.bx-m.ax)*t, ny=m.ay+(m.by-m.ay)*t;
+          m.dx=nx-m.x; m.dy=ny-m.y; m.x=nx; m.y=ny; }
+        stepEater();
+        if(G.pieces.every(p=>p.gone)) break; }
+      const n=G.movers.filter(m=>!m.eaten).length;
+      left+=n; if(n) stuck.push((i+1)+':'+n); }
+    return {sheets, movers, left, stuck:stuck.slice(0,6)};})()`);
+  if(mv.left) bug('eater', mv.left+' platforms the cursor never deletes — '+mv.stuck.join(' '));
+  else ok('eater','every platform on every sheet');
+  /* and dying has to put back exactly what is still ahead of the front */
+  const rs=run(`(()=>{ const bad=[];
+    for(let i=0;i<LEVELS.length && bad.length<3;i++){ loadLevel(i); if(!G.eatOn||!G.movers.length) continue;
+      G.state='play'; P.dead=0;
+      for(let f=0;f<900;f++){ P.x=Math.min(COLS*TS-40,G.eater.front+200); stepEater(); }
+      respawn();
+      for(const p of G.pieces){
+        const ahead = p.x*TS >= G.eater.front;
+        if(p.mv!==undefined){ const m=G.movers[p.mv];
+          if(ahead && m.eaten) bad.push((i+1)+': a platform ahead of the front stayed eaten');
+          if(!ahead && !m.eaten) bad.push((i+1)+': a platform behind the front came back'); } } }
+    return bad;})()`);
+  if(rs.length) bug('eater','respawn does not restore the sheet: '+rs.join('; '));
+  else ok('eater','respawn restores what is still ahead');
+  console.log('       '+r.length+' eater sheets, '+total+' unreachable tiles, worst backlog '+pace+
+              ' pieces, '+mv.movers+' platforms across '+mv.sheets+' sheets');
 }
 
 /* ---------- run ---------- */
@@ -850,7 +944,7 @@ const PHASES={load:phaseLoad, fuzz:phaseFuzz, ui:phaseUi, codes:phaseCodes,
               save:phaseSave, builder:phaseBuilder, cuts:phaseCuts,
               marathon:phaseMarathon, spawnsafe:phaseSpawnsafe, portals:phasePortals,
               respawn:phaseRespawn, intros:phaseIntros, hud:phaseHud,
-              platforms:phasePlatforms, eater:phaseEater, render:phaseRender};
+              platforms:phasePlatforms, eater:phaseEater, render:phaseRender, tasters:phaseTasters};
 console.log('stress — seed '+SEED+(DEEP?' (deep)':'')+(TARGET?' against '+TARGET:''));
 const list = ONLY? [ONLY] : Object.keys(PHASES);
 for(const p of list){

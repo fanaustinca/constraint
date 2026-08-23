@@ -35,6 +35,12 @@ Then five **extra worlds**, 80 sheets each, sitting outside the story:
 | WINTER | 474–553 | ice runs fast (4.9), snow drags (2.15), powdered snow swallows you, and it is snowing |
 | TRIALS | 554–600 | a 47-rung difficulty ladder used by the ranking test, no parts to collect |
 
+The sheet list carries these under an **EXTRA WORLDS** heading, and the first sheet of
+each — Apoapsis, Threshold, Syntax, Dawn, First Frost — is open on a fresh save. The acts
+are a long road, and someone who wants to know what Space or Code actually *is* should not
+have to walk all of it first. A taster grants no progress of its own: clearing one records
+your time and nothing else, so it cannot open the sheet after it or the acts you skipped.
+
 ## The test
 
 **Take the test** on the menu drops you into trial 24 of 47 and binary searches on how
@@ -91,7 +97,7 @@ node tools/stress.js                      # everything else, see below
 ```
 
 `tools/stress.js` drives the whole game from a seeded PRNG — including the game's
-own `Math.random` — so anything it finds replays exactly with `--seed N`. Eighteen
+own `Math.random` — so anything it finds replays exactly with `--seed N`. Nineteen
 phases: every sheet loads with a spawn, an exit and a sane grid; random input
 against sheets with invariants checked every frame; random clicks through every
 menu; hostile share codes; ghost round trips; daily determinism; the ranking search
@@ -99,8 +105,10 @@ terminating; the save surviving garbage; the builder's resize and paint; every
 interlude ending by key and by tap; sheets played back to back watching for leaks;
 portals not crossing or bouncing; no start or datum that can kill you while you
 stand still; no moving platform that can post you inside the geometry; the world
-eater able to reach every tile on its sheet rather than only the solid ones; and no
-tile falling through to a generic block in a code world.
+eater able to reach every tile on its sheet rather than only the solid ones — moving and
+unstable platforms included, which are objects with a path rather than tiles and so used to
+slide past the sweep entirely; no tile falling through to a generic block in a code world;
+and the extra-world tasters staying open on a fresh save without leaking progress.
 
 ```bash
 node tools/stress.js --seed 7     # a different run
