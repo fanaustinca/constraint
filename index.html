@@ -1764,7 +1764,16 @@ const SFX={
 const POKI_BUILD=false;                 /* tools/build-poki.js flips this */
 const ADS={
   ready:false, playing:false, announced:false, inAd:false,
-  absent:false, failed:false,
+  absent:false, failed:false, ready:false,
+  /* Every SDK milestone, stamped, in the Poki build only. When the Inspector
+     says a condition is unmet there is otherwise nothing to look at: the stub
+     queues calls silently and a queued call that never drains looks exactly
+     like a call that was never made. */
+  log(m){
+    if(!POKI_BUILD) return;
+    try{ console.info('%cCONSTRAINT%c '+Math.round(performance.now())+'ms  '+m,
+      'background:#57D98A;color:#0A0F16;border-radius:3px;padding:1px 5px',''); }catch(e){}
+  },
   init(){
     /* The SDK is a separate script from Poki's CDN and there is no promise it
        has run by the time this line does — a slow CDN, a sandboxed preview or a
@@ -1783,29 +1792,40 @@ const ADS={
     return appear.then(found=>{
       if(!found){
         ADS.absent=true;
-        if(POKI_BUILD) try{ console.warn('CONSTRAINT: PokiSDK never appeared — '+
-          'no ads, no SDK events. Is poki-sdk.js reachable from this page?'); }catch(e){}
+        if(POKI_BUILD) try{ console.warn('CONSTRAINT: window.PokiSDK never appeared. '+
+          'No ads and no SDK events are possible. Is poki-sdk.js in this page and '+
+          'reachable? A build without the script tag looks exactly like this.'); }catch(e){}
         return;
       }
+      ADS.log('window.PokiSDK found, calling init()');
       /* never hang the game on the SDK — if init does not settle, start anyway */
       return Promise.race([
-        PokiSDK.init().then(()=>{ ADS.ready=true; })
-                      .catch(()=>{ ADS.failed=true; }),
+        PokiSDK.init().then(()=>{ ADS.ready=true; ADS.log('init() resolved'); })
+                      .catch(()=>{ ADS.failed=true; ADS.log('init() REJECTED'); }),
         new Promise(r=>setTimeout(r, 8000))
-      ]);
+      ]).then(()=>{
+        /* the stub resolves nothing until poki-sdk-core-*.js loads and drains
+           its queue, so an unresolved init is the one symptom worth naming */
+        if(!ADS.ready && !ADS.failed)
+          ADS.log('init() has NOT resolved after 8s — the core SDK script has '+
+                  'not loaded, so every queued call is still waiting');
+      });
     });
   },
   loaded(){
     ADS.announced=true;
+    ADS.log('gameLoadingFinished()');
     try{ window.PokiSDK && PokiSDK.gameLoadingFinished(); }catch(e){}
   },
   playStart(){
     if(ADS.playing || ADS.inAd || !ADS.announced) return;
     ADS.playing=true;
+    ADS.log('gameplayStart()');
     try{ window.PokiSDK && PokiSDK.gameplayStart(); }catch(e){}
   },
   playStop(){
     if(!ADS.playing) return; ADS.playing=false;
+    ADS.log('gameplayStop()');
     try{ window.PokiSDK && PokiSDK.gameplayStop(); }catch(e){}
   },
   lock(on){
