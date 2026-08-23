@@ -2079,7 +2079,15 @@ function moveYStep(dy){
   const pr={x:P.x,y:P.y,w:PW,h:PH};
   for(const m of G.movers){
     if(!overlap(pr,m)) continue;
-    if(dy>0){ P.y=m.y-PH-0.01; hitDir=1; rideHit=m; } else { P.y=m.y+m.h+0.01; hitDir=-1; }
+    /* only land on it if you came from above, only bonk if you came from below —
+       otherwise the platform moved into you, so push out the nearest way */
+    if(dy>0 && prevB<=m.y+2){ P.y=m.y-PH-0.01; hitDir=1; rideHit=m; }
+    else if(dy<0 && prevT>=m.y+m.h-2){ P.y=m.y+m.h+0.01; hitDir=-1; }
+    else {
+      const up=(P.y+PH)-m.y, down=(m.y+m.h)-P.y;
+      if(up<down){ P.y=m.y-PH-0.01; if(dy>=0){ hitDir=1; rideHit=m; } }
+      else { P.y=m.y+m.h+0.01; if(dy<0) hitDir=-1; }
+    }
     pr.y=P.y;
   }
   if(hitDir){
