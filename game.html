@@ -1667,6 +1667,8 @@ const DASHV=8.8, DASHT=11, DASHEND=4.2;
 const SPRING=15, COYOTE=6, BUF=8;
 const ICE_ACC=0.34, ICE_FRIC=0.965;
 const PW=14, PH=18;
+/* frames of grace after a respawn — see die() */
+const GRACE=42;
 
 /* ------------------------------ audio ------------------------------- */
 const A={ctx:null, on:true};
@@ -1763,6 +1765,7 @@ const ADS={
 };
 
 /* ------------------------------ save -------------------------------- */
+const GHOST_MAX=24, GHOST_CAP=4200;
 const SKEY='constraint.save.v1';
 let SAVE=null;
 /* Whatever comes back out of localStorage is treated as hostile: it is the one
@@ -1825,9 +1828,11 @@ if(!SAVE.daily || typeof SAVE.daily!=='object' || Array.isArray(SAVE.daily)) SAV
     for(const k of Object.keys(SAVE.ghosts)){
       if(k==='__proto__') continue;
       const v=SAVE.ghosts[k];
-      if(v && typeof v==='object' && typeof v.d==='string' && v.d.length<=12000 && isFinite(+v.t))
+      if(v && typeof v==='object' && typeof v.d==='string' && v.d.length<=GHOST_CAP*3 && isFinite(+v.t))
         g[k]={t:+v.t, d:v.d};
     }
+  const gk=Object.keys(g);                    /* an oversized store is trimmed here too */
+  while(gk.length>GHOST_MAX) delete g[gk.shift()];
   SAVE.ghosts=g; }
 SAVE.unl = (SAVE.unl && typeof SAVE.unl==='object' && !Array.isArray(SAVE.unl)) ? SAVE.unl : {};
 SAVE.unl.th=flagMap(SAVE.unl.th); SAVE.unl.wr=flagMap(SAVE.unl.wr);
@@ -1908,7 +1913,8 @@ const G={
   fx:[], trail:[], msg:'', msgT:0, banner:0, exit:{x:0,y:0}, ab:{}, won:0
 };
 const P={x:0,y:0,vx:0,vy:0,g:1,ground:0,coyote:0,dj:0,inv:0,dash:0,dashT:0,dashDir:[0,0],
-         lock:0,face:1,wall:0,slide:0,sx:1,sy:1,dead:0,rideM:null,onIce:0,onSnow:0,frost:0,padT:0,invCd:0};
+         lock:0,face:1,wall:0,slide:0,sx:1,sy:1,dead:0,rideM:null,onIce:0,onSnow:0,frost:0,
+         padT:0,invCd:0,grace:0};
 
 function tileAt(cx,cy){
   if(cy<0) return '#'; if(cy>=ROWS) return '.';
@@ -2070,6 +2076,43 @@ function applyDrift(k){
                    spd:0.5*TS/60, ph, u:ph*2, x:r.x*TS, y:r.y*TS, dx:0, dy:0, loose:1});
   }
 }
+/* Would a datum standing here ever be inside something that kills you? The
+   blade paths are sampled rather than solved: a tile is 24px and the samples
+   are far finer than that. */
+function _pathHitsBox(s, box){
+  const N=64, pad=s.r+2;
+  for(let i=0;i<=N;i++){
+    const t=i/N;
+    let px,py;
+    if(s.kind==='orbit'){ const a=t*Math.PI*2; px=s.cx+Math.cos(a)*s.rad; py=s.cy+Math.sin(a)*s.rad; }
+    else { px=s.ax+(s.bx-s.ax)*t; py=s.ay+(s.by-s.ay)*t; }
+    const qx=Math.max(box.x,Math.min(px,box.x+box.w));
+    const qy=Math.max(box.y,Math.min(py,box.y+box.h));
+    const dx=px-qx, dy=py-qy;
+    if(dx*dx+dy*dy < pad*pad) return true;
+  }
+  return false;
+}
+function datumSpot(ox){
+  const HAZ='^v';
+  for(const c of [1,14,2,13,0,15]){
+    const cx=ox+c;
+    if(cx<1 || cx>=COLS-1) continue;
+    if(G.grid[14][cx]!=='.') continue;                 /* the cell has to be free */
+    if('#ISBn'.indexOf(G.grid[15][cx])<0) continue;    /* and something firm underfoot */
+    if(HAZ.indexOf(G.grid[13][cx])>=0 || HAZ.indexOf(G.grid[14][cx])>=0) continue;
+    const box={x:cx*TS+(TS-PW)/2-2, y:14*TS+(TS-PH)-2, w:PW+4, h:PH+4};
+    let clash=false;
+    for(const s of G.saws) if(_pathHitsBox(s, box)){ clash=true; break; }
+    if(!clash) for(const m of G.movers){
+      const x0=Math.min(m.ax,m.bx), x1=Math.max(m.ax,m.bx)+m.w;
+      const y0=Math.min(m.ay,m.by), y1=Math.max(m.ay,m.by)+m.h;
+      if(box.x<x1 && box.x+box.w>x0 && box.y<y1 && box.y+box.h>y0){ clash=true; break; }
+    }
+    if(!clash) return cx;
+  }
+  return -1;
+}
 function loadLevel(i){
   const obj=(typeof i==='object' && i);
   const L=obj||LEVELS[i];
@@ -2083,6 +2126,7 @@ function loadLevel(i){
   G.grid=[];
   for(let y=0;y<ROWS;y++){ let row=''; for(const c of seg) row+=c.t[y]; G.grid.push(row.split('')); }
   G.gems=[]; G.keys=[]; G.movers=[]; G.saws=[]; G.checks=[]; G.portA=[]; G.portB=[];
+  const _datumAt=[];
   seg.forEach((c,k)=>{
     const ox=k*CW;
     (c.m||[]).forEach(m=>G.movers.push({
@@ -2098,11 +2142,17 @@ function loadLevel(i){
     });
     // a datum every other segment, never in the first or last
     const _dv=MOD.sparse?4:2;
-    if(!MOD.nodatum && k>=2 && k%_dv===0 && k<seg.length-1) G.grid[14][ox+1]='C';
+    if(!MOD.nodatum && k>=2 && k%_dv===0 && k<seg.length-1) _datumAt.push(ox);
   });
-  if(L.zones){                       /* one datum per act, exactly on the boundary */
+  /* Datums are placed only now, with every saw and platform on the sheet known.
+     They used to go blindly at column ox+1, which sometimes put the respawn box
+     inside a blade's sweep or a platform's travel: you would come back from a
+     death straight into the thing that killed you, with no input that got you
+     out of it. */
+  for(const ox of _datumAt){ const cx=datumSpot(ox); if(cx>=0) G.grid[14][cx]='C'; }
+  if(L.zones){                       /* one datum per act, near the boundary */
     G.zones=L.zones.map(z=>Object.assign({},z,{x0:z.at*CW*TS}));
-    for(const z of L.zones) if(z.at>0) G.grid[14][z.at*CW+1]='C';
+    for(const z of L.zones) if(z.at>0){ const cx=datumSpot(z.at*CW); if(cx>=0) G.grid[14][cx]='C'; }
   }
   for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
     const ch=G.grid[y][x];
@@ -2170,17 +2220,36 @@ function respawn(hard){
   P.x=G.spawn.x; P.y=G.spawn.y; P.vx=0; P.vy=0; P.g=1; P.ground=0; P.coyote=0;
   P.dj=1; P.inv=1; P.dash=1; P.dashT=0; P.lock=0; P.face=1; P.wall=0; P.slide=0;
   P.sx=1; P.sy=1; P.dead=0; P.rideM=null; P.onIce=0; P.onSnow=0; P.frost=0; P.padT=0; P.invCd=0;
+  P.grace=GRACE;
+  /* the floor comes back with you: respawning into a section the chaos pass had
+     already dissolved was a death you could do nothing about */
+  G.floorGone=0; G.floorWarn=0;
   G.cam=camTarget();
   if(G.eatOn) eaterReset();
   if(hard){ G.broken.clear(); G.crumbs.clear(); }
   else { G.broken.clear(); G.crumbs.clear(); }
 }
 function restart(){ if(G.state!=='play') return; G.deaths++; G.time=0; loadKeep(); }
-function loadKeep(){ const d=G.deaths; loadLevel(G.lvl); G.deaths=d; syncHud(); }
+/* The daily and a builder sheet are not entries in LEVELS — they run at index
+   -2 and -1 — so loadLevel(G.lvl) walks off the front of the array and throws.
+   Every route back to the start of the current sheet comes through here. */
+function reloadSheet(){
+  if(G.lvl===-2) playDaily();
+  else if(G.lvl<0) loadCustom(ED.grid, ED.cols);
+  else loadLevel(G.lvl);
+}
+function loadKeep(){ const d=G.deaths; reloadSheet(); G.deaths=d; syncHud(); }
 
 /* ------------------------------ death ------------------------------- */
-function die(cause){
+function die(cause, force){
   if(P.dead) return;
+  /* A moment's grace after a respawn. Datums are placed on a fixed column, and
+     a saw or a moving platform can be sitting on that column at the instant you
+     arrive — a death with nothing you could have done about it. The grace ends
+     the frame you press anything, so it buys no ground and cannot be used to
+     walk through a hazard. Falling off the sheet is exempt: that is never a
+     surprise, and without the exemption a fall would just be deferred. */
+  if(P.grace>0 && !force) return;
   P.dead=1; G.deaths++; G.freeze=7; G.shake=9; SFX.die(); flash(cause||'OVER-DEFINED');
   for(let i=0;i<26;i++){
     const a=Math.random()*Math.PI*2, s=1+Math.random()*4.2;
@@ -2357,6 +2426,10 @@ function step(){
   if(G.freeze>0){ G.freeze--; return; }
   if(G.state!=='play') return;
   if(P.dead) return;
+  if(P.grace>0){
+    if(IN.l||IN.r||IN.u||IN.d||IN.jumpHeld||IN.dashP||IN.jumpBuf>G.tick-4) P.grace=0;
+    else P.grace--;
+  }
   G.time+=1/60;
 
   /* phase blocks */
@@ -2543,14 +2616,24 @@ function step(){
     }
   }
 
-  /* portals — latched, so landing on the far door does not throw you back */
+  /* Portals — latched, so landing on the far door does not throw you back.
+     The latch releases on a wider radius than it captures on. With one radius
+     for both, standing on a door that sits on a drifting platform was enough
+     to break it: the bob carried you a few pixels past the vertical reach, the
+     latch let go, the bob brought you back, and you were sent through again —
+     ping-ponging between the two doors for ever without touching a control. */
   if(G.portPairs && G.portPairs.length){
-    let touching=false, dest=null;
+    const CX=15, CY=17, RX=30, RY=34;
+    let near=false, dest=null;
     for(const [pa,pb] of G.portPairs){
-      if(Math.abs(pa.x-px)<15 && Math.abs(pa.y-py)<17){ touching=true; if(!dest) dest=pb; }
-      else if(Math.abs(pb.x-px)<15 && Math.abs(pb.y-py)<17){ touching=true; if(!dest) dest=pa; }
+      if(Math.abs(pa.x-px)<RX && Math.abs(pa.y-py)<RY) near=true;
+      if(Math.abs(pb.x-px)<RX && Math.abs(pb.y-py)<RY) near=true;
+      if(!dest){
+        if(Math.abs(pa.x-px)<CX && Math.abs(pa.y-py)<CY) dest=pb;
+        else if(Math.abs(pb.x-px)<CX && Math.abs(pb.y-py)<CY) dest=pa;
+      }
     }
-    if(!touching) G.portLock=0;
+    if(!near) G.portLock=0;
     if(dest && !G.portLock){
       P.x=dest.x-PW/2; P.y=dest.y-PH/2; G.portLock=1; G.cam=camTarget();
       SFX.flip(); G.shake=4;
@@ -2633,7 +2716,8 @@ function step(){
   if(G.eatOn){ stepEater(); if(P.dead) return; }
 
   /* hazards */
-  if(spikeHit() || P.y>VH+70 || P.y<-70){ die(); return; }
+  if(P.y>VH+70 || P.y<-70){ die(undefined, true); return; }
+  if(spikeHit()){ die(); return; }
 
   /* exit */
   if(Math.abs(G.exit.x-px)<16 && Math.abs(G.exit.y-py)<17){
@@ -3871,7 +3955,7 @@ function blankGrid(cols){
   g[ROWS-4][1]='P'; g[ROWS-4][cols-3]='X';
   return g;
 }
-const ED={grid:null, cols:64, tool:'#', slot:1, painting:false, theme:'blueprint'};
+const ED={grid:blankGrid(64), cols:64, tool:'#', slot:1, painting:false, theme:'blueprint'};
 /* the geometry of an official sheet, opened up for taking apart. Movers and
    saws live beside the grid rather than in it, so they do not come across. */
 function gridFromLevel(i){
@@ -3938,6 +4022,10 @@ function edTile(e){
 }
 function edPaint(e){
   const {cx,cy}=edTile(e);
+  /* a canvas laid out at zero width divides by zero here, and NaN loses every
+     comparison below — it would walk straight past the bounds check into
+     ED.grid[NaN][NaN] */
+  if(!isFinite(cx)||!isFinite(cy)) return;
   if(cx<0||cx>=ED.cols||cy<0||cy>=ROWS) return;
   if(ED.tool==='P'||ED.tool==='X'){
     for(let y=0;y<ROWS;y++) for(let x=0;x<ED.cols;x++) if(ED.grid[y][x]===ED.tool) ED.grid[y][x]='.';
@@ -3973,7 +4061,7 @@ function drawEditor(){
    Your best run on a sheet, sampled every third frame and delta encoded.
    Trials never record one — the test is meant to be met cold.
    -------------------------------------------------------------------- */
-const GHOST_MAX=24, GHOST_CAP=4200;
+
 function ghostKey(){
   if(G.lvl>=0) return (LEVELS[G.lvl] && LEVELS[G.lvl].rank!==undefined) ? null : 'L'+G.lvl;
   if(G.lvl===-2) return 'D'+(G.dailyKey||'');
@@ -4195,10 +4283,13 @@ function play(i){
   G.state='play'; loadLevel(i); showOv(null); ac();
 }
 function togglePause(){
-  if(G.state==='play'){ G.state='pause'; showOv('ovPause'); }
+  if(G.state==='play'){
+    $('btnSkip').classList.toggle('hidden', G.lvl<0);
+    G.state='pause'; showOv('ovPause'); }
   else if(G.state==='pause'){ G.state='play'; showOv(null); }
 }
 function skipLevel(){
+  if(G.lvl<0) return;                 /* there is nothing to skip to from those */
   SAVE.skipped[G.lvl]=1;
   SAVE.unlocked=Math.max(SAVE.unlocked, Math.min(LEVELS.length, G.lvl+2));
   save();
@@ -4662,10 +4753,9 @@ $('btnSkip').onclick=()=>{
   if(G.state!=='pause') return;
   ADS.rewarded(ok=>{ if(ok) skipLevel(); else flash('SKIP UNAVAILABLE'); });
 };
-$('btnRetry2').onclick=()=>{ G.state='play'; showOv(null); const d=G.deaths+1; loadLevel(G.lvl); G.deaths=d; syncHud(); };
+$('btnRetry2').onclick=()=>{ G.state='play'; showOv(null); const d=G.deaths+1; reloadSheet(); G.deaths=d; syncHud(); };
 $('btnQuit').onclick=()=>{ REMIX=false; TEST.on=false; $('btnGiveUp').classList.add('hidden'); G.state='menu'; buildPicker(); showOv('ovLevels'); };
-$('btnRetry').onclick=()=>{ G.state='play'; showOv(null);
-  if(G.lvl===-2) playDaily(); else if(G.lvl<0) loadCustom(ED.grid,ED.cols); else loadLevel(G.lvl); };
+$('btnRetry').onclick=()=>{ G.state='play'; showOv(null); reloadSheet(); };
 $('btnNext').onclick=nextLevel;
 $('btnList').onclick=()=>{ G.state='menu'; buildPicker(); showOv('ovLevels'); };
 const DEVCODE='AF010114';
@@ -4747,7 +4837,7 @@ $('btnPlay').textContent = SAVE.unlocked>1 ? 'Continue' : 'Start';
 
 /* ----------------------------- touch -------------------------------- */
 cv.addEventListener('pointerdown',()=>{
-  if(G.state!=='cut') return;
+  if(G.state!=='cut' || ADS.inAd) return;
   const S=SC[G.cutScene]||SC[1];
   if(G.cut < S.end) G.cut=S.end;
   else if(G.cutScene===5) play(LEVELS.length-1);

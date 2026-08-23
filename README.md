@@ -84,7 +84,26 @@ cd tools
 node solvability.js         # bot-plays all 600 sheets, reports any it cannot finish
 node solvability.js 0 60    # or just a range
 node bounds.js              # asserts the player never leaves the sheet
-cd .. && node tools/pokicheck.js poki/index.html   # SDK lifecycle and ad rules
+cd ..
+node tools/pokicheck.js poki/index.html   # SDK lifecycle and ad rules
+node tools/buildercheck.js                # share codes, remixing, themes
+node tools/stress.js                      # everything else, see below
+```
+
+`tools/stress.js` drives the whole game from a seeded PRNG — including the game's
+own `Math.random` — so anything it finds replays exactly with `--seed N`. Thirteen
+phases: every sheet loads with a spawn, an exit and a sane grid; random input
+against sheets with invariants checked every frame; random clicks through every
+menu; hostile share codes; ghost round trips; daily determinism; the ranking search
+terminating; the save surviving garbage; the builder's resize and paint; every
+interlude ending by key and by tap; sheets played back to back watching for leaks;
+portals not crossing or bouncing; and no start or datum that can kill you while you
+stand still.
+
+```bash
+node tools/stress.js --seed 7     # a different run
+node tools/stress.js --only ui    # one phase
+node tools/stress.js --deep       # longer
 ```
 
 `solvability.js` proves a sheet is *completable*. It does not prove it is fun, fair, or correctly
