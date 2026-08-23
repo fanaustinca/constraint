@@ -93,10 +93,16 @@ setTimeout(()=>{
   /* ---- gameplay ---- */
   console.log('\ngameplay');
   run("play(0)"); frame();
+  /* a fresh save meets the first sheet's introduction card, and a card is not
+     gameplay: no session may be open behind it */
+  if(run("G.state")==='intro'){
+    ok(run("ADS.playing")===false, 'no session is open behind an introduction card');
+    run("closeIntro()"); frame();
+  }
   if(isPoki){
     ok(idx('gameplayStart')>idx('gameLoadingFinished'), 'gameplayStart only after gameLoadingFinished');
   }
-  ok(run("ADS.playing")===true, 'a session is open while playing');
+  ok(run("ADS.playing")===true, 'a session is open once play actually starts');
 
   /* ---- no internal ad timer ---- */
   console.log('\nad frequency is Poki’s to decide');

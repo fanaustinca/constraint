@@ -207,6 +207,9 @@ button.free:hover{background:var(--datum); color:var(--ink)}
   stroke-linecap:round; stroke-linejoin:round;
 }
 .touch button.act{border-color:var(--accent); color:var(--accent); background:rgba(255,122,47,.22)}
+/* pause lives away from the thumbs, at the top, so it is never hit by accident */
+.touch .pz{top:3.5%; bottom:auto; right:3.5%; width:10%; padding-bottom:10%}
+.touch .pz svg{width:52%; height:52%}
 .touch .l{left:3.5%}
 .touch .r{left:22%}
 .touch .a{right:3.5%; bottom:5%; width:20%; padding-bottom:20%}
@@ -262,6 +265,12 @@ button.free:hover{background:var(--datum); color:var(--ink)}
   color:var(--datum);
 }
 .codemsg.bad{color:var(--hazard)}
+.introlist{display:flex; flex-direction:column; gap:10px; max-width:46ch; text-align:left}
+.introrow{display:flex; flex-direction:column; gap:2px}
+.introrow b{
+  font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); font-weight:700;
+}
+.introrow span{font-size:12px; letter-spacing:.05em; color:var(--text-dim); line-height:1.45}
 .hidden{display:none !important}
 /* nothing on the page is clickable while a break is on screen */
 body.adlock .app{pointer-events:none}
@@ -407,6 +416,12 @@ body.embed .buildpanel{
         </div>
       </div>
 
+      <div class="ov" id="ovIntro">
+        <div class="dimline"><i></i><span id="introTitle">new on this sheet</span><i></i></div>
+        <div class="introlist" id="introList"></div>
+        <div class="row"><button class="primary" id="introGo">Got it</button></div>
+      </div>
+
       <div class="ov" id="ovAd">
         <div class="dimline"><i></i><span id="adKind">optional unlock</span><i></i></div>
         <h2 id="adText">Unlock</h2>
@@ -433,10 +448,11 @@ body.embed .buildpanel{
       </div>
 
       <div class="touch" id="touch">
-        <button class="l" type="button" aria-label="Move left"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4 8 12l7 8"/></svg></button>
-        <button class="r" type="button" aria-label="Move right"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l7 8-7 8"/></svg></button>
-        <button class="bb" type="button" aria-label="Dash"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5l7 7-7 7M13 5l7 7-7 7"/></svg></button>
-        <button class="a" type="button" aria-label="Jump"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11l7-7 7 7M5 20l7-7 7 7"/></svg></button>
+        <button class="pz" type="button" aria-label="Pause"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg></button>
+        <button class="pad l" type="button" aria-label="Move left"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4 8 12l7 8"/></svg></button>
+        <button class="pad r" type="button" aria-label="Move right"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l7 8-7 8"/></svg></button>
+        <button class="pad bb" id="padDash" type="button" aria-label="Dash"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5l7 7-7 7M13 5l7 7-7 7"/></svg></button>
+        <button class="pad a" type="button" aria-label="Jump"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 11l7-7 7 7M5 20l7-7 7 7"/></svg></button>
       </div>
     </div>
   </div>
@@ -483,7 +499,7 @@ body.embed .buildpanel{
   <div class="cmd">
     <span class="grp"><kbd>&larr;&rarr;</kbd> move</span>
     <span class="grp"><kbd>SPACE</kbd> jump</span>
-    <span class="grp"><kbd>SHIFT</kbd> dash</span>
+    <span class="grp hidden" id="cmdDash"><kbd>SHIFT</kbd> dash</span>
     <span class="grp"><kbd>R</kbd> restart</span>
     <span class="grp"><kbd>ESC</kbd> pause</span>
     <span class="spacer"></span>
@@ -1840,6 +1856,7 @@ if(!SAVE.daily || typeof SAVE.daily!=='object' || Array.isArray(SAVE.daily)) SAV
   SAVE.ghosts=g; }
 SAVE.unl = (SAVE.unl && typeof SAVE.unl==='object' && !Array.isArray(SAVE.unl)) ? SAVE.unl : {};
 SAVE.unl.th=flagMap(SAVE.unl.th); SAVE.unl.wr=flagMap(SAVE.unl.wr);
+SAVE.seen=flagMap(SAVE.seen);
 A.on=!SAVE.mute;
 }
 loadSave();
@@ -1884,6 +1901,7 @@ addEventListener('keydown',e=>{
     else { G.state='menu'; buildPicker(); showOv('ovMenu'); }
     return;
   }
+  if(G.state==='intro'){ e.preventDefault(); closeIntro(); return; }
   if(G.state==='done' && (e.code==='Enter'||e.code==='Space')){ e.preventDefault(); nextLevel(); return; }
   const a=MAP[e.code];
   if(a){ e.preventDefault(); HELD[e.code]=1; down(a); return; }
@@ -1938,6 +1956,7 @@ function isSolid(cx,cy){
 
 /* ------------------------------ load -------------------------------- */
 function partsIn(i){
+  if(LEVELS[i] && LEVELS[i].rank!==undefined) return 0;   /* trials carry none */
   let n=0;
   for(const id of LEVELS[i].chunks)
     for(const row of CHUNKS[id].t) for(const ch of row) if(ch==='o') n++;
@@ -2117,6 +2136,74 @@ function datumSpot(ox){
   }
   return -1;
 }
+/* Everything the game can put in front of you that wants a word of explanation.
+   A sheet is scanned for these on load; anything the player has not met before
+   gets a card at the start of the sheet, once, ever. */
+const INTROS=[
+  {k:'jump',    n:'Jump',              d:'Hold it for height. Let go early and the jump cuts short.'},
+  {k:'part',    n:'Parts',             d:'Amber diamonds. Entirely optional, and the reason to come back to a sheet.'},
+  {k:'datum',   n:'Datums',            d:'Green flags. Touch one and it becomes where you come back to. Sheets are long.'},
+  {k:'spike',   n:'Spikes',            d:'Red kills you on contact. So does falling off the sheet.'},
+  {k:'thin',    n:'Thin platforms',    d:'Land on one from above and jump up through it. Press down to drop through.'},
+  {k:'crumb',   n:'Construction geometry', d:'Dashed blocks hold you a moment, break, and come back a few seconds later.'},
+  {k:'dj',      n:'Double jump',       d:'A second push in mid-air, once per landing.'},
+  {k:'wall',    n:'Wall slide',        d:'Press into a wall to slide down it. Jump to kick off it.'},
+  {k:'mirror',  n:'Mirror pads',       d:'Violet pads flip gravity the instant you touch one. They come in pairs.'},
+  {k:'dash',    n:'Dash',              d:'A fast burst in whatever direction you hold. Recharges when you land.'},
+  {k:'spring',  n:'Springs',           d:'Cyan chevrons throw you far higher than any jump reaches.'},
+  {k:'updraft', n:'Updrafts',          d:'Rising air carries you up. Steer out of the top onto whatever the climb was for.'},
+  {k:'phase',   n:'Phase blocks',      d:'Two sets trade places on a timer. They flicker just before they switch.'},
+  {k:'key',     n:'Keys and doors',    d:'Take every key on the sheet and the amber doors let go.'},
+  {k:'polish',  n:'Polished faces',    d:'Solid, but there is nothing to grab: no wall slide, no wall jump.'},
+  {k:'ice',     n:'Ice',               d:'Fast and slippery. You keep sliding after you stop steering.'},
+  {k:'snow',    n:'Snow',              d:'Solid, but it drags. Running across it is slow going.'},
+  {k:'powder',  n:'Powdered snow',     d:'Looks exactly like snow. You sink in, you cannot run, and the cold builds. Jump straight back out.'},
+  {k:'portal',  n:'Portals',           d:'Two doors, one sheet. Step into one and come out of the other.'},
+  {k:'saw',     n:'Blades',            d:'They run a fixed path and they never stop. Time your way past.'},
+  {k:'mover',   n:'Moving platforms',  d:'They run between two points. Ride them, and mind the gap they leave behind.'},
+  {k:'cursor',  n:'The cursor',        d:'It is loose in the sheet with you. It picks a piece of geometry and deletes it — the selection box is your warning. Get off that piece.'},
+  {k:'drift',   n:'Under-defined geometry', d:'Amber dashed platforms drift on their own and sag when you land. Do not stand still on one.'},
+  {k:'chaos',   n:'Corruption',        d:'The sheet is coming apart, and the floor itself is not guaranteed.'},
+  {k:'lowg',    n:'Low gravity',       d:'Jumps carry much higher and much further, and you build speed slowly.'},
+  {k:'cold',    n:'The cold',          d:'Only bare ground thaws you now. Ice and snow both bite.'},
+  {k:'flat',    n:'One dimension',     d:'The sheet is collapsed to lines, and you can only see what is near you.'},
+  {k:'light',   n:'A white sheet',     d:'Everything reads inverted: light ground, dark geometry.'},
+  {k:'allparts',n:'Every part required', d:'The exit will not open until you have recovered all of them.'}
+];
+function featuresHere(MOD){
+  const t=new Set();
+  for(let y=0;y<ROWS;y++){ const r=G.grid0[y]; for(let x=0;x<COLS;x++) t.add(r[x]); }
+  const f=['jump'];
+  if(G.gems.length) f.push('part');
+  if(G.checks.length) f.push('datum');
+  if(t.has('^')||t.has('v')) f.push('spike');
+  if(t.has('=')) f.push('thin');
+  if(t.has('~')) f.push('crumb');
+  if(G.ab.dj) f.push('dj');
+  if(G.ab.wall) f.push('wall');
+  if(t.has('G')) f.push('mirror');
+  if(G.ab.dash) f.push('dash');
+  if(t.has('B')) f.push('spring');
+  if(t.has('W')) f.push('updraft');
+  if(t.has('T')||t.has('t')) f.push('phase');
+  if(G.keys.length || t.has('D')) f.push('key');
+  if(t.has('S')) f.push('polish');
+  if(t.has('I')) f.push('ice');
+  if(t.has('n')) f.push('snow');
+  if(t.has('w')) f.push('powder');
+  if((G.portPairs||[]).length) f.push('portal');
+  if(G.saws.length) f.push('saw');
+  if(G.movers.length) f.push('mover');
+  if(G.eatOn) f.push('cursor');
+  if(MOD.drift) f.push('drift');
+  if(MOD.chaos) f.push('chaos');
+  if((MOD.gravity||1)<0.9) f.push('lowg');
+  if(MOD.cold) f.push('cold');
+  if(MOD.render==='flat') f.push('flat');
+  if(MOD.render==='light') f.push('light');
+  if(MOD.allparts) f.push('allparts');
+  return f;
+}
 function loadLevel(i){
   const obj=(typeof i==='object' && i);
   const L=obj||LEVELS[i];
@@ -2170,6 +2257,9 @@ function loadLevel(i){
     else if(ch==='q'){ G.portB.push({x:x*TS+TS/2,y:y*TS+TS/2}); G.grid[y][x]='.'; }
   }
   pairPortals();
+  /* The ladder measures how you move, so there is nothing optional on it to
+     pull you off the line. */
+  if(L.rank!==undefined) G.gems.length=0;
   G.partsTotal=G.gems.length;
   G.parts=0; G.deaths=0; G.time=0; G.won=0; G.banner=110;
   G.broken.clear(); G.crumbs.clear(); G.doorOpen=false; G.phase=0; G.phaseT=0;
@@ -2197,6 +2287,7 @@ function loadLevel(i){
   if(L.zones && L.zones.some(z=>z.eat)) G.eatOn=G.eatOn||false;
   G.eater={front:-120, st:'idle', t:0, tgt:null, i:0, cx:-60, cy:VH*0.4, sx:0, sy:0};
   G.grid0=G.grid.map(r=>r.slice());
+  G.feat=featuresHere(MOD);
   if(G.eatOn || (L.zones && L.zones.some(z=>z.eat))) buildPieces();
   loadGhost();
   respawn(true);
@@ -4175,6 +4266,7 @@ function playDaily(){
   G.dailyKey=key;
   const L=makeDaily(key);
   G.state='play'; showOv(null); loadLevel(L); ac();
+  showIntro();
 }
 function setStreakTag(){
   const d=SAVE.daily||{};
@@ -4264,10 +4356,15 @@ function setRankTag(){
 
 /* -------------------------------- UI -------------------------------- */
 const $=id=>document.getElementById(id);
-const OVS=['ovBoot','ovMenu','ovLevels','ovHow','ovPause','ovDone','ovRank','ovAd'];
+const OVS=['ovBoot','ovMenu','ovLevels','ovHow','ovPause','ovDone','ovRank','ovAd','ovIntro'];
 function showOv(id){ OVS.forEach(o=>$(o).classList.toggle('on',o===id)); }
 function fmt(t){ return t.toFixed(2); }
 function syncHud(){
+  /* neither the key list nor the touch pad advertises a move you do not have
+     yet — dash arrives in DRIVEN, and some sheets suppress it again */
+  const canDash=!!(G.ab && G.ab.dash);
+  $('cmdDash').classList.toggle('hidden', !canDash);
+  $('padDash').classList.toggle('hidden', !canDash);
   if(G.lvl===-2){
     $('hudLv').textContent=G.dailyKey||'daily'; $('hudCon').textContent='DAILY';
     $('hudParts').textContent=G.parts+'/'+(G.partsTotal||0);
@@ -4285,6 +4382,34 @@ function syncHud(){
 }
 function play(i){
   G.state='play'; loadLevel(i); showOv(null); ac();
+  showIntro();
+}
+/* Anything on this sheet the player has not met before gets a card, once ever.
+   The clock does not run behind it — 'intro' is not 'play', so the timer, the
+   simulation and Poki's gameplay session all wait for the card to be closed.
+   Never during the ranking test: that is meant to be met cold. */
+const INTRO_MAX=5;
+function showIntro(){
+  if(TEST.on) return;
+  SAVE.seen=SAVE.seen||{};
+  const fresh=(G.feat||[]).filter(k=>!SAVE.seen[k] && INTROS.some(t=>t.k===k)).slice(0,INTRO_MAX);
+  if(!fresh.length) return;
+  const box=$('introList'); box.innerHTML='';
+  for(const k of fresh){
+    const it=INTROS.find(t=>t.k===k);
+    const row=document.createElement('div'); row.className='introrow';
+    const nm=document.createElement('b'); nm.textContent=it.n;
+    const ds=document.createElement('span'); ds.textContent=it.d;
+    row.appendChild(nm); row.appendChild(ds); box.appendChild(row);
+    SAVE.seen[k]=1;
+  }
+  save();
+  $('introTitle').textContent = fresh.length>1 ? 'new on this sheet' : 'new on this sheet';
+  G.state='intro'; showOv('ovIntro');
+}
+function closeIntro(){
+  if(G.state!=='intro') return;
+  G.state='play'; showOv(null); ac();
 }
 function togglePause(){
   if(G.state==='play'){
@@ -4752,6 +4877,7 @@ $('btnRankDone').onclick=()=>{ G.state='menu'; showOv('ovMenu'); };
 $('btnGiveUp').onclick=()=>{ if(TEST.on) endTrial(true); };
 setRankTag();
 $('btnHowBack').onclick=()=>showOv('ovMenu');
+$('introGo').onclick=closeIntro;
 $('btnResume').onclick=togglePause;
 $('btnSkip').onclick=()=>{
   if(G.state!=='pause') return;
@@ -4841,7 +4967,9 @@ $('btnPlay').textContent = SAVE.unlocked>1 ? 'Continue' : 'Start';
 
 /* ----------------------------- touch -------------------------------- */
 cv.addEventListener('pointerdown',()=>{
-  if(G.state!=='cut' || ADS.inAd) return;
+  if(ADS.inAd) return;
+  if(G.state==='intro'){ closeIntro(); return; }
+  if(G.state!=='cut') return;
   const S=SC[G.cutScene]||SC[1];
   if(G.cut < S.end) G.cut=S.end;
   else if(G.cutScene===5) play(LEVELS.length-1);
@@ -4851,7 +4979,12 @@ cv.addEventListener('pointerdown',()=>{
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 if(matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window)){
   $('touch').classList.add('on');
-  const bs=$('touch').querySelectorAll('button');
+  $('touch').querySelectorAll('.pz').forEach(b=>{
+    const go=e=>{ e.preventDefault(); if(ADS.inAd) return;
+      if(G.state==='play'||G.state==='pause') togglePause(); };
+    b.addEventListener('pointerdown',go);
+  });
+  const bs=$('touch').querySelectorAll('button.pad');
   const acts=['l','r','dash','jump'];
   bs.forEach((b,i)=>{
     const a=acts[i];

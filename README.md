@@ -33,7 +33,7 @@ Then five **extra worlds**, 80 sheets each, sitting outside the story:
 | CODE | 314–393 | the sheet renders as source glyphs; you are a blinking caret |
 | LIGHT | 394–473 | the whole sheet composited to inverse — white ground, dark geometry |
 | WINTER | 474–553 | ice runs fast (4.9), snow drags (2.15), powdered snow swallows you, and it is snowing |
-| TRIALS | 554–600 | a 47-rung difficulty ladder used by the ranking test |
+| TRIALS | 554–600 | a 47-rung difficulty ladder used by the ranking test, no parts to collect |
 
 ## The test
 
@@ -142,7 +142,17 @@ are kept. Trials never record one — the ranking test is meant to be met cold.
 Arrows or WASD to move · Space/W/Up to jump (hold for height) · Shift/X to dash ·
 Down to drop through thin platforms · R restart · Esc pause · M mute
 
-On a touch device the on-screen pad appears automatically and the sheet fills the screen.
+On a touch device the on-screen pad appears automatically and the sheet fills the screen:
+left, right, dash and jump as drawn glyphs, and a pause control at the top right. The key
+list and the dash button both hide themselves on sheets where dash is not yours yet.
+
+## Introductions
+
+Every sheet is scanned on load for the things it contains — abilities, tile types, hazards,
+world modifiers — and anything the player has not met before gets a card at the start of the
+sheet, once ever. Twenty-two cards across a full run, the first on sheet 1 and the last on
+534. The card is not gameplay: the clock, the simulation and Poki's gameplay session all
+wait behind it. The ranking test never shows one, because it is meant to be met cold.
 
 ## Builds
 

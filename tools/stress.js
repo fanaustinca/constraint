@@ -84,7 +84,7 @@ function head(t){ console.log('\n'+t); }
 
 /* ---------- shared invariant check ---------- */
 run(`
-const STATES=['menu','play','pause','done','edit','cut','boot','rank'];
+const STATES=['menu','play','pause','done','edit','cut','boot','rank','intro'];
 function _inv(){
   const b=[];
   if(!isFinite(P.x)||!isFinite(P.y)) b.push('player position not finite: '+P.x+','+P.y);
@@ -476,7 +476,11 @@ function phaseCuts(){
       if(!left) bug('cuts','interlude '+c+' never ends on '+how);
       else {
         const st=run('G.state');
-        if(['menu','play','done'].indexOf(st)<0) bug('cuts','interlude '+c+' ('+how+') ended in state '+st);
+        /* 'intro' is a legitimate landing: the sheet an interlude opens onto may
+           introduce something, and the card holds the clock until it is closed */
+        if(['menu','play','done','intro'].indexOf(st)<0) bug('cuts','interlude '+c+' ('+how+') ended in state '+st);
+        if(st==='intro'){ run('closeIntro()');
+          if(run('G.state')!=='play') bug('cuts','interlude '+c+' ('+how+'): closing the card did not start the sheet'); }
       }
       ok('cuts','interlude '+c+' by '+how);
     }
@@ -502,6 +506,60 @@ function phaseSpawnsafe(){
     if(r!=='ok') bug('spawnsafe','sheet '+(i+1)+': '+r);
     ok('spawnsafe','sheet '+(i+1));
   }
+}
+
+/* ================= phase: intros ================= */
+function phaseIntros(){
+  head('intros — every new thing gets a card, once, and nothing is left unexplained');
+  const feats=run(`(()=>{const all=new Set();
+    for(let i=0;i<LEVELS.length;i++){ loadLevel(i); for(const f of G.feat) all.add(f); }
+    return [...all];})()`);
+  const cards=run('INTROS.map(t=>t.k)');
+  for(const f of feats) if(cards.indexOf(f)<0) bug('intros','"'+f+'" appears in the game but has no card');
+  for(const c of cards) if(feats.indexOf(c)<0) bug('intros','the card for "'+c+'" is never shown by any sheet');
+  for(const c of cards){
+    const t=run('INTROS.find(t=>t.k==='+JSON.stringify(c)+')');
+    if(!t.n || !t.d) bug('intros','the card for "'+c+'" is missing a name or a line');
+    if(t.d && t.d.length>170) bug('intros','the card for "'+c+'" runs to '+t.d.length+' characters');
+  }
+  /* a straight playthrough: how many cards, and never the same one twice */
+  const seq=run(`(()=>{ SAVE.seen={}; TEST.on=false; const seen={}, out=[];
+    for(let i=0;i<LEVELS.length;i++){
+      loadLevel(i);
+      const fresh=G.feat.filter(k=>!seen[k] && INTROS.some(t=>t.k===k));
+      if(fresh.length>INTRO_MAX+0.001) return 'a card would carry '+fresh.length+' rows';
+      for(const k of fresh) seen[k]=1;
+      if(fresh.length) out.push(i+1);
+    }
+    return out;})()`);
+  if(typeof seq==='string'){ bug('intros',seq); }
+  else {
+    console.log('       '+seq.length+' cards across a full run, first at sheet '+seq[0]+', last at '+seq[seq.length-1]);
+    if(seq.length>34) bug('intros','a player would be interrupted '+seq.length+' times');
+    if(seq[0]!==1) bug('intros','the first sheet shows no card at all');
+  }
+  /* opening and closing one, and the clock held behind it */
+  const beh=run(`(()=>{
+    SAVE.seen={}; TEST.on=false; play(0);
+    if(G.state!=='intro') return 'sheet 1 showed no card';
+    const t0=G.time; for(let i=0;i<90;i++) step();
+    if(G.time!==t0) return 'the clock ran behind the card';
+    if(ADS.playing) return 'a gameplay session was open behind the card';
+    closeIntro();
+    if(G.state!=='play') return 'closing did not start the sheet';
+    play(0);
+    if(G.state!=='play') return 'the card came back a second time';
+    SAVE.seen={}; TEST.on=true; play(0); const s=G.state; TEST.on=false;
+    if(s!=='play') return 'a card interrupted the ranking test';
+    return 'ok';})()`);
+  if(beh!=='ok') bug('intros',beh);
+  ok('intros','behaviour');
+  /* the ladder carries nothing optional */
+  const g=run(`(()=>{let t=0; for(let i=TRIAL0;i<TRIAL0+TRIALN;i++){ loadLevel(i); t+=G.gems.length; } return t;})()`);
+  if(g) bug('intros','the trial ladder still has '+g+' parts on it');
+  const g2=run(`(()=>{let t=0; for(let i=0;i<40;i++){ loadLevel(i); t+=G.gems.length; } return t;})()`);
+  if(!g2) bug('intros','ordinary sheets lost their parts too');
+  ok('intros','trials');
 }
 
 /* ================= phase: respawn ================= */
@@ -617,7 +675,7 @@ const PHASES={load:phaseLoad, fuzz:phaseFuzz, ui:phaseUi, codes:phaseCodes,
               ghosts:phaseGhosts, daily:phaseDaily, ranking:phaseRanking,
               save:phaseSave, builder:phaseBuilder, cuts:phaseCuts,
               marathon:phaseMarathon, spawnsafe:phaseSpawnsafe, portals:phasePortals,
-              respawn:phaseRespawn};
+              respawn:phaseRespawn, intros:phaseIntros};
 console.log('stress — seed '+SEED+(DEEP?' (deep)':'')+(TARGET?' against '+TARGET:''));
 const list = ONLY? [ONLY] : Object.keys(PHASES);
 for(const p of list){
