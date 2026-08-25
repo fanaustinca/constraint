@@ -707,9 +707,11 @@ function phaseMarathon(){
 }
 
 /* ================= phase: tasters =================
-   One sheet of each side world is open from the start. The trap is that
-   clearing sheet 314 with the old rule set unlocked to 315, which would have
-   opened every act between it and the beginning. */
+   One sheet of each side world is open from the start, and clearing it walks
+   forward through that world alone. The trap is that SAVE.unlocked is a single
+   number over all 600 sheets in order, so raising it from sheet 314 would open
+   every act in front of it — the side chain has to be read from what has been
+   cleared instead, and leave that number alone. */
 /* ================= phase: edview ================= */
 function phaseEdview(){
   head('edview — the builder viewport is recut for the screen, and a click still '+
@@ -789,7 +791,7 @@ function phaseEdview(){
 }
 
 function phaseTasters(){
-  head('tasters — a side world opens one sheet, and clearing it unlocks nothing else');
+  head('tasters — a side world opens one sheet, and clearing it walks that world only');
   const T=run('Array.from(tasters()).sort((a,b)=>a-b)');
   const acts=run('Array.from(tasters()).sort((a,b)=>a-b).map(i=>(WORLDS[LEVELS[i].w]||{}).act)');
   if(T.length<4) bug('tasters','only '+T.length+' side worlds open a sheet');
@@ -797,38 +799,82 @@ function phaseTasters(){
   if(new Set(acts).size!==acts.length) bug('tasters','two tasters come from the same world type');
   else ok('tasters','one per world type');
   /* fresh save: exactly sheet 1 and the tasters */
-  const open=run(`(()=>{ SAVE.unlocked=1; const a=[];
+  const open=run(`(()=>{ SAVE.unlocked=1; SAVE.best={}; SAVE.skipped={}; const a=[];
     for(let i=0;i<LEVELS.length;i++) if(sheetOpen(i)) a.push(i); return a;})()`);
   const want=[0].concat(T);
   if(open.join()!==want.join()) bug('tasters','a fresh save opens '+open.length+' sheets, expected '+want.length+': '+open.join(','));
   else ok('tasters','a fresh save opens sheet 1 and the tasters, nothing else');
-  /* clearing one grants no progress, but still records the time */
+  /* Clearing one opens the next sheet of that side world and nothing else. The
+     trap the whole design works around is that SAVE.unlocked is one number
+     walking all 600 in order: raising it from sheet 314 would hand you every act
+     in front of it. So the side chain is read from what you have cleared, and
+     that number is never touched here. */
   for(const t of T){
     const r=run(`(()=>{ SAVE.unlocked=1; SAVE.best={}; SAVE.parts={}; SAVE.skipped={};
       G.state='play'; loadLevel(${t}); G.time=9.5; G.won=0; win();
-      return {unlocked:SAVE.unlocked, best:SAVE.best[${t}]!==undefined, next:sheetOpen(${t}+1)};})()`);
+      let leak=0; for(let i=1;i<LEVELS.length;i++){
+        if(i===${t} || i===${t}+1) continue;
+        if(sheetOpen(i) && !tasters().has(i)) leak++;
+      }
+      return {unlocked:SAVE.unlocked, best:SAVE.best[${t}]!==undefined,
+              next:sheetOpen(${t}+1), leak:leak};})()`);
     if(r.unlocked!==1) bug('tasters','clearing sheet '+(t+1)+' unlocked '+r.unlocked+' sheets');
     else if(!r.best)   bug('tasters','clearing sheet '+(t+1)+' did not record a time');
-    else if(r.next)    bug('tasters','clearing sheet '+(t+1)+' opened the sheet after it');
-    else ok('tasters','sheet '+(t+1)+' grants no progress');
-    const sk=run(`(()=>{ SAVE.unlocked=1; SAVE.skipped={};
+    else if(!r.next)   bug('tasters','clearing sheet '+(t+1)+' left the sheet after it locked');
+    else if(r.leak)    bug('tasters','clearing sheet '+(t+1)+' opened '+r.leak+' sheets elsewhere');
+    else ok('tasters','sheet '+(t+1)+' opens the next sheet of its world and nothing else');
+    const sk=run(`(()=>{ SAVE.unlocked=1; SAVE.best={}; SAVE.skipped={};
       G.state='play'; loadLevel(${t}); G.lvl=${t}; skipLevel();
-      return SAVE.unlocked;})()`);
-    if(sk!==1) bug('tasters','skipping sheet '+(t+1)+' unlocked '+sk+' sheets');
-    else ok('tasters','sheet '+(t+1)+' grants nothing on a skip');
-    /* and it must not drop you into the locked sheet behind it */
-    const nx=run(`(()=>{ SAVE.unlocked=1; SAVE.cuts={}; nextLevel._shown=false;
-      G.state='play'; loadLevel(${t}); G.lvl=${t}; G.state='done'; nextLevel();
+      return {u:SAVE.unlocked, next:sheetOpen(${t}+1)};})()`);
+    if(sk.u!==1) bug('tasters','skipping sheet '+(t+1)+' unlocked '+sk.u+' sheets');
+    else if(!sk.next) bug('tasters','skipping sheet '+(t+1)+' left the sheet after it locked');
+    else ok('tasters','sheet '+(t+1)+' moves the side chain on a skip, not the road');
+    /* and finishing it carries you on into that world rather than back to the list */
+    const nx=run(`(()=>{ SAVE.unlocked=1; SAVE.best={}; SAVE.skipped={}; SAVE.cuts={};
+      G.state='play'; loadLevel(${t}); G.lvl=${t}; G.time=9.5; G.won=0; win();
+      G.state='done'; nextLevel._shown=false; nextLevel();
       nextLevel._shown=false; return {state:G.state, lvl:G.lvl};})()`);
-    if(nx.lvl!==t) bug('tasters','finishing sheet '+(t+1)+' carried you into sheet '+(nx.lvl+1));
-    else ok('tasters','sheet '+(t+1)+' returns you to the list');
+    if(nx.lvl!==t+1) bug('tasters','finishing sheet '+(t+1)+' did not carry you into sheet '+(t+2)+' (landed on '+(nx.lvl+1)+')');
+    else ok('tasters','sheet '+(t+1)+' runs on into sheet '+(t+2));
   }
+  /* Every sheet of a side act is reachable by playing that act, all four worlds
+     of it, and the chain stops dead at the act edge. */
+  for(const t of T){
+    const act=run(`(WORLDS[LEVELS[${t}].w]||{}).act`);
+    const r=run(`(()=>{ SAVE.unlocked=1; SAVE.best={}; SAVE.skipped={};
+      const mine=[]; for(let i=0;i<LEVELS.length;i++)
+        if(((WORLDS[LEVELS[i].w]||{}).act||1)===${act}) mine.push(i);
+      for(const i of mine) SAVE.best[i]=12;
+      const last=mine[mine.length-1];
+      let shut=0; for(const i of mine) if(!sheetOpen(i)) shut++;
+      const worlds=new Set(mine.map(i=>LEVELS[i].w)).size;
+      return {shut:shut, worlds:worlds, n:mine.length,
+              past:sheetOpen(last+1) && !tasters().has(last+1),
+              unlocked:SAVE.unlocked};})()`);
+    if(r.n!==80)      bug('tasters','act '+act+' has '+r.n+' sheets, expected 80');
+    else if(r.worlds!==4) bug('tasters','act '+act+' spans '+r.worlds+' worlds, expected 4');
+    else if(r.shut)   bug('tasters','act '+act+' leaves '+r.shut+' of its own sheets locked after clearing it');
+    else if(r.past)   bug('tasters','act '+act+' spills into the sheet after it');
+    else if(r.unlocked!==1) bug('tasters','act '+act+' raised the main road to '+r.unlocked);
+    else ok('tasters','act '+act+' — all 80 sheets across 4 worlds, and it stops there');
+  }
+  /* the main road is never opened by clearing, only by SAVE.unlocked */
+  const road=run(`(()=>{ SAVE.unlocked=1; SAVE.best={}; SAVE.skipped={};
+    SAVE.best[151]=12; SAVE.best[3]=12; SAVE.skipped[60]=1;
+    return [sheetOpen(152), sheetOpen(4), sheetOpen(61)].filter(Boolean).length;})()`);
+  if(road) bug('tasters','clearing a main-road sheet opened '+road+' sheets on its own');
+  else ok('tasters','the main road still moves on SAVE.unlocked alone');
+  const side=run(`(()=>{ let n=0; for(let i=0;i<LEVELS.length;i++){
+    const a=(WORLDS[LEVELS[i].w]||{}).act||1;
+    if((a<7||a>11) && sideOpen(i)) n++; } return n;})()`);
+  if(side) bug('tasters','the side rule claims '+side+' main-road sheets');
+  else ok('tasters','the side rule touches no sheet outside the side worlds');
   /* normal progression is untouched */
   const norm=run(`(()=>{ SAVE.unlocked=5; SAVE.best={};
     G.state='play'; loadLevel(4); G.time=9.5; G.won=0; win(); return SAVE.unlocked;})()`);
   if(norm!==6) bug('tasters','clearing sheet 5 normally left unlocked at '+norm+', expected 6');
   else ok('tasters','normal progression still advances');
-  /* the picker survives every progress point */
+  /* the picker survives every progress point, and lists all four worlds of a type */
   let threw=0;
   for(const u of [1,2,40,80,104,128,152,154,234,314,394,474,600]){
     try{ run(`SAVE.unlocked=${u}; REMIX=false; buildPicker();`); ok('tasters','picker at '+u); }

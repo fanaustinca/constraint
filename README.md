@@ -35,11 +35,18 @@ Then five **extra worlds**, 80 sheets each, sitting outside the story:
 | WINTER | 474–553 | ice runs fast (4.9), snow drags (2.15), powdered snow swallows you, and it is snowing |
 | TRIALS | 554–600 | a 47-rung difficulty ladder used by the ranking test, no parts to collect |
 
-The sheet list carries these under an **EXTRA WORLDS** heading, and the first sheet of
-each — Apoapsis, Threshold, Syntax, Dawn, First Frost — is open on a fresh save. The acts
-are a long road, and someone who wants to know what Space or Code actually *is* should not
-have to walk all of it first. A taster grants no progress of its own: clearing one records
-your time and nothing else, so it cannot open the sheet after it or the acts you skipped.
+The sheet list carries these under an **EXTRA WORLDS** heading — all twenty sets, locked
+ones included, so you can see that Space is eighty sheets rather than twenty. The first
+sheet of each type — Apoapsis, Threshold, Syntax, Dawn, First Frost — is open on a fresh
+save. The acts are a long road, and someone who wants to know what Space or Code actually
+*is* should not have to walk all of it first.
+
+From there a side world is its own chain: a sheet opens when the one before it in the same
+type has been cleared or skipped, and the chain stops dead at the edge of that type.
+`SAVE.unlocked` is a single number walking all 600 sheets in order, which is right for the
+acts and wrong for anything beside them — raising it from sheet 314 would hand you every
+act in front of it. So clearing a side sheet never touches that number, and clearing an act
+sheet never opens a side one.
 
 ## The test
 
@@ -109,7 +116,8 @@ stand still; no moving platform that can post you inside the geometry; the world
 eater able to reach every tile on its sheet rather than only the solid ones — moving and
 unstable platforms included, which are objects with a path rather than tiles and so used to
 slide past the sweep entirely; no tile falling through to a generic block in a code world;
-and the extra-world tasters staying open on a fresh save without leaking progress; and the
+and the side worlds — every one of the twenty listed, each type walking its own eighty
+sheets to the end and stopping there, without ever moving the main road; and the
 builder's viewport being recut for the screen without a click ever landing on a tile other
 than the one it points at.
 

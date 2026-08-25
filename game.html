@@ -4955,7 +4955,24 @@ function tasters(){
   _tasters=new Set(Object.keys(first).map(k=>first[k]));
   return _tasters;
 }
-function sheetOpen(i){ return i+1<=SAVE.unlocked || tasters().has(i); }
+/* Progress inside a side world is its own chain. SAVE.unlocked is one number
+   walking the whole 600 in order, which is right for the acts and wrong for
+   everything beside them: a taster opened one sheet and then nothing, because
+   clearing it deliberately does not advance that number — otherwise finishing
+   sheet 314 would open acts I to VIII behind it. So a side sheet opens when the
+   one before it in the same act has been cleared, which keeps the chain inside
+   the world and never touches the road. */
+function cleared(i){ return SAVE.best[i]!==undefined || !!SAVE.skipped[i]; }
+function sideOpen(i){
+  const L=LEVELS[i]; if(!L) return false;
+  const act=(WORLDS[L.w]||{}).act||1;
+  if(act<7 || act>11) return false;
+  if(tasters().has(i)) return true;              /* the way in */
+  const prev=LEVELS[i-1];
+  if(!prev || ((WORLDS[prev.w]||{}).act||1)!==act) return false;   /* first of its act */
+  return cleared(i-1);
+}
+function sheetOpen(i){ return i+1<=SAVE.unlocked || sideOpen(i); }
 function buildPicker(){
   refreshBuildBtn();
   const p=$('picker'); p.innerHTML='';
@@ -4979,9 +4996,10 @@ function buildPicker(){
     const idx=LEVELS.map((l,i)=>[l,i]).filter(a=>a[0].w===wi);
     if(!idx.length) return;
     const reachable=idx.some(a=>sheetOpen(a[1]));
-    /* a side world appears as soon as anything in it can be played, which for
-       the first world of each type is immediately */
-    if(!reachable && SAVE.unlocked<=ACTSTART[act]) return;
+    /* A side world is always listed, all four of each type. Hiding the ones you
+       have not reached meant Space looked like a single set of twenty rather
+       than eighty, with no sign the rest existed — its cards lock on their own. */
+    if(act<7 && !reachable && SAVE.unlocked<=ACTSTART[act]) return;
     if(act!==curAct){
       curAct=act;
       if(act>=7 && !extraShown){
