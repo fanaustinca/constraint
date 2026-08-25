@@ -98,7 +98,7 @@ node tools/stress.js                      # everything else, see below
 ```
 
 `tools/stress.js` drives the whole game from a seeded PRNG — including the game's
-own `Math.random` — so anything it finds replays exactly with `--seed N`. Nineteen
+own `Math.random` — so anything it finds replays exactly with `--seed N`. Twenty
 phases: every sheet loads with a spawn, an exit and a sane grid; random input
 against sheets with invariants checked every frame; random clicks through every
 menu; hostile share codes; ghost round trips; daily determinism; the ranking search
@@ -109,7 +109,9 @@ stand still; no moving platform that can post you inside the geometry; the world
 eater able to reach every tile on its sheet rather than only the solid ones — moving and
 unstable platforms included, which are objects with a path rather than tiles and so used to
 slide past the sweep entirely; no tile falling through to a generic block in a code world;
-and the extra-world tasters staying open on a fresh save without leaking progress.
+and the extra-world tasters staying open on a fresh save without leaking progress; and the
+builder's viewport being recut for the screen without a click ever landing on a tile other
+than the one it points at.
 
 ```bash
 node tools/stress.js --seed 7     # a different run
@@ -128,7 +130,14 @@ Paint a sheet from a 26-tile palette — each swatch is drawn the way the sheet 
 that tile, with its name and its rule underneath — size it 32–1088 columns, keep three save
 slots, and test-play it in place. A **View** row pans the camera — hold ◀ ▶ to scroll, click
 to jump a screen, or go straight to Start or End — because arrow keys are no use on a phone
-and the on-screen pads sit underneath the panel. Pausing a sheet you built offers **Back to the builder**
+and the on-screen pads sit underneath the panel.
+
+Play is always 32 columns wide; the builder is not. A sheet is eighteen rows tall whatever
+the screen, so a 32:18 window on a phone in portrait gives them 232px between them — a 13px
+tile, too small to aim at. The editor instead gives the rows a workable height and shows
+however many columns the width then affords, panning to reach the rest: about 15 columns at
+26px on a tall phone, the full 32 on anything landscape. The panel is capped at 44% of the
+viewport and scrolls, rather than growing until it owns the screen. Pausing a sheet you built offers **Back to the builder**
 rather than the sheet list.
 
 Three of the palette entries are not tiles but objects with a path: **Platform ↕** and

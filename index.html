@@ -224,6 +224,10 @@ button.free:hover{background:var(--datum); color:var(--ink)}
 .buildpanel{
   display:none; flex-direction:column; gap:8px;
   background:var(--panel); border:1px solid var(--gridmaj); padding:10px;
+  /* the panel used to be as tall as its contents wanted, which on a phone was
+     most of the screen — the sheet you are drawing got a letterbox slit and the
+     palette got everything. Cap it and let it scroll instead. */
+  max-height:min(44vh,400px); overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y;
 }
 .buildpanel.on{display:flex}
 .buildui{display:flex; flex-direction:column; gap:8px; width:100%}
@@ -308,12 +312,13 @@ body.embed .stage{
 }
 body.embed .buildpanel{
   position:absolute; z-index:7; left:0; right:0; bottom:0;
-  max-height:58%; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y;
+  max-height:44%; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y;
 }
-/* a short landscape phone has almost no height to give: let the panel take more
-   of it, and shrink the swatches so the palette costs fewer rows */
+/* a short landscape phone has almost no height to give either way, so spend
+   what there is on the sheet and make the panel itself denser */
 @media (max-height:560px){
-  body.embed .buildpanel{max-height:72%; padding:7px; gap:6px}
+  body.embed .buildpanel{max-height:52%; padding:7px; gap:6px}
+  .buildpanel{max-height:min(52vh,340px); padding:7px; gap:6px}
   .buildui{gap:6px}
 }
 @media (max-width:560px){
@@ -2692,7 +2697,7 @@ function step(){
        exactly where the build panel is pinned — they are unreachable there and
        absent altogether on a mouse, so the panel carries its own pan buttons */
     const sp=(IN.r?7:0)-(IN.l?7:0)+(ED.pan||0)*9;
-    G.cam=Math.max(0,Math.min(Math.max(0,ED.cols*TS-VW), G.cam+sp));
+    G.cam=Math.max(0,Math.min(Math.max(0,ED.cols*TS-EDVW), G.cam+sp));
     const pp=$('bPanPos'); if(pp) pp.textContent=String(Math.round(G.cam/TS)+1);
     return;
   }
@@ -3537,9 +3542,37 @@ const C={ink:'#0A0F16',grid:'#131D28',major:'#1D2C3C',line:'#5E8FB5',dim:'#3A5A7
 const REDUCED=(()=>{ try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }
                      catch(e){ return false; } })();
 const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+/* The editor's viewport width, in world units. A plain variable and not a
+   field on ED, because fit() runs at load and ED is declared further down —
+   reaching for it here throws before the game ever draws a frame. */
+let EDVW=VW;
+/* How many world units of width the editor shows. Play is always 32 columns,
+   but the builder has no such contract, and on a tall narrow screen a 32:18
+   window turns the sheet into a letterbox slit — eighteen rows inside 232px on
+   a phone is a 13px tile, too small to aim at. So the editor gives the rows a
+   workable height and shows fewer columns, panning to reach the rest. */
+function edViewW(){
+  if(G.state!=='edit') return VW;
+  const q=t=>{ try{ return document.querySelector&&document.querySelector(t); }catch(e){ return null; } };
+  const sh=q('.sheet'); if(!sh) return VW;
+  const bw=sh.clientWidth; if(!(bw>0)) return VW;
+  /* the height the stage may occupy: the window, less whatever the panel and
+     the top bar have taken. Measured, not assumed, but capped so a tall panel
+     cannot squeeze the sheet to nothing. */
+  const pan=q('.buildpanel');
+  let used=0;
+  try{ if(pan && pan.classList.contains('on')) used=pan.getBoundingClientRect().height||0; }catch(e){}
+  const wh=window.innerHeight||VH;
+  const bh=Math.max(wh*0.3, wh-Math.min(used, wh*0.62)-46);
+  /* fill the height with all ROWS, then see how many columns the width affords */
+  const w=bw*VH/bh;
+  return Math.max(12*TS, Math.min(VW, Math.round(w)));
+}
 function fit(){
   const s=Math.min(2,window.devicePixelRatio||1);
-  cv.width=VW*s; cv.height=VH*s; ctx.setTransform(s,0,0,s,0,0);
+  EDVW=edViewW();
+  const vw=EDVW;
+  cv.width=vw*s; cv.height=VH*s; ctx.setTransform(s,0,0,s,0,0);
   /* In the embed the stage used to be width:100%/height:100% held in shape by
      two viewport-unit caps pulling against each other. That is only ever right
      while the sheet box IS the viewport, and an ad break does not promise that:
@@ -3551,11 +3584,14 @@ function fit(){
   const q=s=>{ try{ return document.querySelector&&document.querySelector(s); }catch(e){ return null; } };
   const st=q('.stage'), sh=q('.sheet');
   if(!st||!sh) return;
+  /* the box has to match whatever the canvas is now shaped like, or the sheet
+     is stretched again — the same fault an ad break used to cause */
+  st.style.aspectRatio = vw+' / '+VH;
   if(!document.body.classList.contains('embed')){ st.style.width=''; st.style.height=''; return; }
   const bw=sh.clientWidth, bh=sh.clientHeight;
   if(bw<=0||bh<=0) return;                       /* hidden behind an ad: ask again later */
-  const sc=Math.min(bw/VW, bh/VH);
-  st.style.width=Math.round(VW*sc)+'px';
+  const sc=Math.min(bw/vw, bh/VH);
+  st.style.width=Math.round(vw*sc)+'px';
   st.style.height=Math.round(VH*sc)+'px';
 }
 fit(); addEventListener('resize',fit);
@@ -3580,8 +3616,9 @@ function rr(x,y,w,h,r){ ctx.beginPath();
 function dash(on){ ctx.setLineDash(on?[3,3]:[]); }
 
 function drawGrid(cam){
-  ctx.fillStyle=C.ink; ctx.fillRect(cam-24,-24,VW+48,VH+48);
-  const c0=Math.floor(cam/TS), c1=c0+VCOLS+1;
+  const gw=EDVW;
+  ctx.fillStyle=C.ink; ctx.fillRect(cam-24,-24,gw+48,VH+48);
+  const c0=Math.floor(cam/TS), c1=c0+Math.ceil(gw/TS)+1;
   ctx.lineWidth=1;
   /* parallax datum marks, drifting at half rate */
   ctx.strokeStyle='rgba(94,143,181,.07)';
@@ -4381,7 +4418,7 @@ function loadCustom(g,cols){
 }
 function edTile(e){
   const r=cv.getBoundingClientRect();
-  const x=(e.clientX-r.left)/r.width*VW + G.cam;
+  const x=(e.clientX-r.left)/r.width*EDVW + G.cam;
   const y=(e.clientY-r.top)/r.height*VH;
   return {cx:Math.floor(x/TS), cy:Math.floor(y/TS)};
 }
@@ -4472,7 +4509,7 @@ function drawEditor(){
   /* pin the timed tiles to their present state — what you place is what you see */
   G.phase=0; G.doorOpen=0; G.phaseT=0; G.broken=G.broken||new Map(); G.crumbs=G.crumbs||new Map();
   drawTiles(cam);
-  const k0=Math.max(0,Math.floor(cam/TS)-1), k1=Math.min(ED.cols-1,Math.floor((cam+VW)/TS)+1);
+  const k0=Math.max(0,Math.floor(cam/TS)-1), k1=Math.min(ED.cols-1,Math.floor((cam+EDVW)/TS)+1);
   for(let cy=0;cy<ROWS;cy++) for(let cx=k0;cx<=k1;cx++)
     edObject(ED.grid[cy][cx], cx*TS, cy*TS);
   ctx.strokeStyle='rgba(255,122,47,.5)'; ctx.lineWidth=1;
@@ -4970,6 +5007,7 @@ function openBuild(){
   REMIX=false;
   G.state='edit'; G.cam=0; showOv(null); $('buildPanel').classList.add('on');
   paintPalette(); paintThemes();
+  try{ fit(); }catch(e){}      /* the editor window is not the play window */
 }
 function paintThemes(){
   const p=$('bThemes'); p.innerHTML='';
@@ -5266,7 +5304,7 @@ $('btnQuit').onclick=()=>{ REMIX=false; TEST.on=false; $('btnGiveUp').classList.
 $('btnToBuild').onclick=()=>{ if(G.lvl===-1) openBuild(); };
 /* press and hold to pan; a plain click nudges one screen */
 (()=>{
-  const edge=()=>Math.max(0,ED.cols*TS-VW);
+  const edge=()=>Math.max(0,ED.cols*TS-EDVW);
   const hold=(id,dir)=>{
     const b=$(id); if(!b) return;
     let held=false;
@@ -5274,7 +5312,7 @@ $('btnToBuild').onclick=()=>{ if(G.lvl===-1) openBuild(); };
     const off=()=>{ if(!held) return; held=false; ED.pan=0; };
     ['pointerup','pointercancel','pointerleave'].forEach(t=>b.addEventListener(t,off));
     b.onclick=()=>{ if(ED.pan) return;
-      G.cam=Math.max(0,Math.min(edge(), G.cam+dir*VW*0.75)); };
+      G.cam=Math.max(0,Math.min(edge(), G.cam+dir*EDVW*0.75)); };
   };
   hold('bPanL',-1); hold('bPanR',1);
   $('bPanS').onclick=()=>{ ED.pan=0; G.cam=0; };
@@ -5398,6 +5436,11 @@ function loop(ts){
      route in and out of play is covered exactly once and never twice */
   const live = (G.state==='play' && !ADS.inAd);
   if(live!==ADS.playing){ live ? ADS.playStart() : ADS.playStop(); }
+  /* the editor and the sheet are different shapes, so the canvas has to be
+     re-cut on every crossing between them — done here rather than on the
+     buttons, because Done, Test sheet, Esc and Back are four separate doors */
+  const ed=(G.state==='edit');
+  if(ed!==fit._ed){ fit._ed=ed; try{ fit(); }catch(e){} }
   const dt=Math.min(60,ts-last); last=ts;
   if(ADS.inAd){ acc=0; draw(); return; }   /* frozen while a break is on screen */
   acc+=dt;

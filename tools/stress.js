@@ -710,6 +710,56 @@ function phaseMarathon(){
    One sheet of each side world is open from the start. The trap is that
    clearing sheet 314 with the old rule set unlocked to 315, which would have
    opened every act between it and the beginning. */
+/* ================= phase: edview ================= */
+function phaseEdview(){
+  head('edview — the builder viewport is recut for the screen, and a click still '+
+       'lands on the tile it points at');
+  /* Play is always 32 columns. The builder is not: on a tall narrow screen it
+     shows fewer columns at a workable size and pans instead. Two things have to
+     stay true or the editor paints the wrong square in silence — the canvas box
+     matches the viewport it draws, and edTile() undoes exactly what drawEditor
+     does. Both are checked here across the shapes a phone actually is. */
+  const stage={style:{},classList:{contains:()=>false}};
+  const sheet={clientWidth:0,clientHeight:0};
+  let PH=0;
+  const panel={classList:{contains:()=>true},getBoundingClientRect:()=>({height:PH})};
+  const prev=sandbox.document.querySelector;
+  sandbox.document.querySelector=q=> q==='.stage'?stage : q==='.sheet'?sheet
+                                   : q==='.buildpanel'?panel : null;
+  try{
+    const VW=run('VW'), VH=run('VH'), TS=run('TS'), ROWS=run('ROWS');
+    run("SAVE.unlocked=99; openBuild(); ED.cols=96; ED.grid=blankGrid(96);");
+    const cap=h=> h<=560 ? Math.min(0.52*h,340) : Math.min(0.44*h,400);
+    const screens=[[412,915],[915,412],[820,1180],[1600,900],[1440,700],[390,844],[768,1024]];
+    for(const [w,h] of screens){
+      sheet.clientWidth=w; sheet.clientHeight=h; PH=cap(h);
+      sandbox.window.innerHeight=h;
+      run("G.state='edit'"); run('fit()');
+      const vw=run('EDVW');
+      ok(vw>0 && vw<=VW, w+'x'+h+' — viewport is '+(vw/TS).toFixed(1)+' columns, never more than play');
+      ok(String(stage.style.aspectRatio)===vw+' / '+VH,
+         w+'x'+h+' — the box is cut to the same shape the canvas draws');
+      /* a click in the far corner must resolve to the last drawn tile */
+      const boxW=Math.min(w, h*vw/VH);
+      const r={left:0,top:0,width:boxW,height:boxW*VH/vw};
+      sandbox.document.getElementById('c').getBoundingClientRect=()=>r;
+      run('G.cam=0');
+      const t=run("edTile({clientX:"+(r.width-1)+", clientY:"+(r.height-1)+"})");
+      ok(t.cy===ROWS-1, w+'x'+h+' — the bottom row is reachable');
+      ok(t.cx<=Math.floor(vw/TS) && t.cx>=Math.floor(vw/TS)-2,
+         w+'x'+h+' — the right edge maps to the column drawn there');
+      /* panning to the end must not run past the sheet */
+      run("ED.pan=1"); for(let i=0;i<400;i++) run('step()'); run('ED.pan=0');
+      ok(run('G.cam') <= run('ED.cols*TS-EDVW')+0.5, w+'x'+h+' — panning stops at the last column');
+    }
+    run("G.state='play'"); run('fit()');
+    ok(run('EDVW')===VW, 'leaving the builder gives play its 32 columns back');
+  } finally {
+    sandbox.document.querySelector=prev;
+    run("G.state='menu'");
+  }
+}
+
 function phaseTasters(){
   head('tasters — a side world opens one sheet, and clearing it unlocks nothing else');
   const T=run('Array.from(tasters()).sort((a,b)=>a-b)');
@@ -945,7 +995,8 @@ const PHASES={load:phaseLoad, fuzz:phaseFuzz, ui:phaseUi, codes:phaseCodes,
               save:phaseSave, builder:phaseBuilder, cuts:phaseCuts,
               marathon:phaseMarathon, spawnsafe:phaseSpawnsafe, portals:phasePortals,
               respawn:phaseRespawn, intros:phaseIntros, hud:phaseHud,
-              platforms:phasePlatforms, eater:phaseEater, render:phaseRender, tasters:phaseTasters};
+              platforms:phasePlatforms, eater:phaseEater, render:phaseRender, tasters:phaseTasters,
+              edview:phaseEdview};
 console.log('stress — seed '+SEED+(DEEP?' (deep)':'')+(TARGET?' against '+TARGET:''));
 const list = ONLY? [ONLY] : Object.keys(PHASES);
 for(const p of list){
