@@ -1826,6 +1826,7 @@ const ADS={
   },
   loaded(){
     ADS.announced=true;
+    if(!ADS.last) ADS.last=Date.now();   /* the first break is five minutes in, not instant */
     ADS.log('gameLoadingFinished()');
     try{ window.PokiSDK && PokiSDK.gameLoadingFinished(); }catch(e){}
   },
@@ -1848,9 +1849,21 @@ const ADS={
        nothing fires a window resize when it does */
     else try{ fit(); }catch(e){}
   },
+  /* The shortest a player may go between commercial breaks. This used to be
+     Poki's call alone and ours not at all — no timer here, their capping
+     decides. In practice that meant a break at the end of every sheet, and a
+     sheet can be forty seconds long, which is nobody's idea of a game. Their
+     cap still applies on top; this is only a floor beneath it. */
+  GAP: 5*60*1000,
+  last: 0,
+  due(){ return (Date.now()-ADS.last) >= ADS.GAP; },
+  spent(){ ADS.last=Date.now(); },
   break(then){
+    /* asked too soon after the last one: walk straight on, no break, no stop */
+    if(!ADS.due()){ then(); return; }
     ADS.playStop();                      /* gameplayStop always precedes an ad */
-    if(!window.PokiSDK){ then(); return; }
+    if(!window.PokiSDK){ ADS.spent(); then(); return; }
+    ADS.spent();
     const wasOn=A.on;
     const done=()=>{ ADS.lock(false); A.on=wasOn; clearInput(); then(); };
     try{
@@ -1858,6 +1871,10 @@ const ADS={
     }catch(e){ done(); }
   },
   rewarded(then){
+    /* a video the player asked for still counts as one they just watched —
+       following it with an interstitial thirty seconds later is the thing
+       this whole gap exists to prevent */
+    ADS.spent();
     ADS.playStop();
     if(!window.PokiSDK){
       /* No SDK at all. In the artifact and Pages builds there is no ad economy
@@ -4857,9 +4874,9 @@ function nextLevel(){
   if(G.state!=='done') return;
   /* Work out where this goes before asking for anything. A commercial break is
      only allowed when the player is walking straight back into gameplay: never
-     on the way to a menu, a daily summary, the builder, or an interlude. How
-     often one actually runs is Poki's decision, not ours — there is no timer
-     of our own here. */
+     on the way to a menu, a daily summary, the builder, or an interlude. It is
+     also only allowed if it has been ADS.GAP since the last one — see there for
+     why the frequency is not left entirely to Poki. */
   let dest, playable=false;
   if(G.lvl===-2)   dest=()=>{ G.state='menu'; showOv('ovMenu'); };
   else if(G.lvl<0) dest=()=>openBuild();

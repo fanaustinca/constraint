@@ -217,8 +217,13 @@ otherwise indistinguishable from one that was never made.
 
 Ad handling follows Poki's lifecycle rules rather than any schedule of our own:
 
-- **Frequency is Poki's.** There is no internal timer. `commercialBreak()` is requested at
-  every clean sheet transition and their capping decides whether one runs.
+- **Five minutes between breaks, at least.** `commercialBreak()` used to be requested at every
+  clean sheet transition, with Poki's capping left to decide. Their cap does work, but a sheet
+  can be forty seconds long, and an interstitial every forty seconds is not a game anyone stays
+  in. `ADS.GAP` is a floor beneath their cap, not a replacement for it: a break asked for too
+  soon is refused outright and the player walks straight on, and the SDK is not troubled. Over
+  half an hour of forty-second sheets that is 5 breaks rather than 45. A rewarded video the
+  player chose also pushes the next break back — it is still a video they just watched.
 - **Only back into gameplay.** A break is never requested on the way to a menu, a daily
   summary, the builder, or an interlude — `nextLevel()` resolves the destination first.
 - **`gameLoadingFinished()` before anything else.** The menu stays behind a loading panel

@@ -104,17 +104,33 @@ setTimeout(()=>{
   }
   ok(run("ADS.playing")===true, 'a session is open once play actually starts');
 
-  /* ---- no internal ad timer ---- */
-  console.log('\nad frequency is Poki’s to decide');
-  ok(run("typeof ADS.gap")==='undefined',  'no ADS.gap');
-  ok(run("typeof ADS.due")==='undefined',  'no ADS.due()');
-  ok(run("typeof ADS.tick")==='undefined', 'no play-time clock');
+  /* ---- a floor under the frequency, Poki's cap on top ---- */
+  console.log('\nhow often a break may run');
+  ok(run("ADS.GAP")>=3*60*1000, 'at least three minutes between breaks (it is '+
+     (run("ADS.GAP")/60000)+' minutes)');
+  /* a sheet can be forty seconds long, so a break at the end of each one is
+     what this floor exists to stop */
+  run("ADS.last=Date.now()");
+  ok(run("ADS.due()")===false, 'a break straight after one is refused');
+  run("ADS.last=Date.now()-ADS.GAP-1000");
+  ok(run("ADS.due()")===true,  'and allowed once the gap has passed');
+  /* refusing must still deliver the player to the next sheet, and ask for nothing */
+  const beforeRef=calls.filter(c=>c==='commercialBreak').length;
+  run("ADS.last=Date.now(); globalThis.__went=false; ADS.break(()=>{globalThis.__went=true})");
+  ok(run("__went")===true, 'a refused break still moves you on');
+  ok(calls.filter(c=>c==='commercialBreak').length===beforeRef,
+     'and asks the SDK for nothing');
+  /* a rewarded video the player chose still resets the clock */
+  run("ADS.last=Date.now()-ADS.GAP-1000; ADS.rewarded(()=>{})");
+  ok(run("ADS.due()")===false, 'a rewarded video pushes the next break back too');
+  run("ADS.last=0");
 
   /* ---- a break only on the way back into gameplay ---- */
   console.log('\nwhere a commercial break is allowed');
   const asked=()=>calls.filter(c=>c==='commercialBreak').length;
   const probe=(setup,label,want)=>{
     const before=asked();
+    run("ADS.last=0");        /* long ago, so the gap is not what is under test here */
     run(setup); run("nextLevel._shown=false; G.state='done'; try{nextLevel()}catch(e){}");
     /* with no SDK there is no break to request anywhere, which is the point */
     ok((asked()-before>0)===(want && isPoki), isPoki? label : label.replace(/-> .*/,'-> no SDK, no break'));
