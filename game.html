@@ -3562,20 +3562,24 @@ let EDVW=VW, EDVH=VH;
    small to hit, stop shrinking and start cropping. Below MINTILE the editor
    keeps the tiles legible and shows less of the sheet, panning to reach the
    rest, on both axes. Above it everything fits and nothing pans. */
-const MINTILE=20;
+const MINTILE=20, BARPX=34;    /* the title strip above the sheet */
+/* what the panel is nominally allowed, matching the CSS cap. A function of the
+   window and nothing else, so it is the same answer every time it is asked. */
+function edPanelBudget(wh){
+  return wh<=560 ? Math.min(0.52*wh,340) : Math.min(0.44*wh,400);
+}
 function edView(){
   if(G.state!=='edit') return {w:VW, h:VH};
   const q=t=>{ try{ return document.querySelector&&document.querySelector(t); }catch(e){ return null; } };
   const sh=q('.sheet'); if(!sh) return {w:VW, h:VH};
   const bw=sh.clientWidth; if(!(bw>0)) return {w:VW, h:VH};
-  /* the height the stage may occupy: the window, less what the panel and the
-     top bar have taken. Measured, not assumed, and capped so a tall panel
-     cannot squeeze the sheet to nothing. */
-  const pan=q('.buildpanel');
-  let used=0;
-  try{ if(pan && pan.classList.contains('on')) used=pan.getBoundingClientRect().height||0; }catch(e){}
+  /* The height the sheet may occupy. This is deliberately computed from the
+     window alone and never from the panel's measured height: the panel is
+     about to be grown to fill whatever the sheet leaves over, and a size that
+     was derived from measuring it would then feed back into itself — the level
+     would shrink because the panel grew because the level shrank. */
   const wh=window.innerHeight||VH;
-  const bh=Math.max(wh*0.28, wh-Math.min(used, wh*0.6)-46);
+  const bh=Math.max(wh*0.28, wh-edPanelBudget(wh)-46);
   const fit=Math.min(bw/VW, bh/VH);            /* scale that shows the whole sheet */
   const z=Math.max(fit, MINTILE/TS);           /* never below a tile you can hit */
   return { w: Math.max(10*TS, Math.min(VW, Math.round(bw/z))),
@@ -3607,20 +3611,41 @@ function fit(){
   const edit=(G.state==='edit');
   st.style.marginTop = edit? '0' : '';
   st.style.marginBottom = edit? 'auto' : '';
-  if(!document.body.classList.contains('embed')){ st.style.width=''; st.style.height=''; syncPanUI(); return; }
+  if(!document.body.classList.contains('embed')){
+    st.style.width=''; st.style.height='';
+    edFillPanel(0);                       /* measure it, the flow decided its height */
+    syncPanUI(); return;
+  }
   const bw=sh.clientWidth, bh0=sh.clientHeight;
   if(bw<=0||bh0<=0) return;                      /* hidden behind an ad: ask again later */
   let bh=bh0;
-  if(edit){
-    const pan=(()=>{ try{ return document.querySelector('.buildpanel'); }catch(e){ return null; } })();
-    let used=0;
-    try{ if(pan && pan.classList.contains('on')) used=pan.getBoundingClientRect().height||0; }catch(e){}
-    bh=Math.max(bh0*0.35, bh0-Math.min(used, bh0*0.6));
-  }
+  if(edit) bh=Math.max(bh0*0.35, bh0-edPanelBudget(bh0));
   const sc=Math.min(bw/vw, bh/vh);
   st.style.width=Math.round(vw*sc)+'px';
   st.style.height=Math.round(vh*sc)+'px';
+  edFillPanel(Math.round(vh*sc));
   syncPanUI();          /* a resize can add or remove the need to pan down */
+}
+/* The level is already as large as MINTILE lets it be, and on a tall phone that
+   left a band of nothing between the bottom of the sheet and the top of the
+   palette. Hand that band to the panel: it grows upward to meet the sheet, and
+   because edView() never measures the panel, the level does not move. */
+function edFillPanel(stageH){
+  let pan=null;
+  try{ pan=document.querySelector('.buildpanel'); }catch(e){}
+  if(!pan) return;
+  const on=(G.state==='edit') && (()=>{ try{ return pan.classList.contains('on'); }catch(e){ return false; } })();
+  if(!on){ if(pan.style.minHeight) pan.style.minHeight=''; return; }
+  if(!(stageH>0)){
+    /* not laid out in pixels (the non-embed flow case): ask the element */
+    try{ const st=document.querySelector('.stage');
+         stageH=st && st.getBoundingClientRect ? st.getBoundingClientRect().height : 0; }catch(e){ stageH=0; }
+  }
+  const wh=window.innerHeight||VH;
+  const left=Math.round(Math.max(0, wh-stageH-BARPX));
+  const px=left? left+'px' : '';
+  if(pan.style.minHeight!==px) pan.style.minHeight=px;   /* only write on change: a
+       ResizeObserver is watching, and rewriting the same value churns it forever */
 }
 fit(); addEventListener('resize',fit);
 addEventListener('orientationchange',fit);

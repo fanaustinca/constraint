@@ -719,10 +719,10 @@ function phaseEdview(){
      stay true or the editor paints the wrong square in silence — the canvas box
      matches the viewport it draws, and edTile() undoes exactly what drawEditor
      does. Both are checked here across the shapes a phone actually is. */
-  const stage={style:{},classList:{contains:()=>false}};
+  const stage={style:{},classList:{contains:()=>false},getBoundingClientRect:()=>({height:0})};
   const sheet={clientWidth:0,clientHeight:0};
   let PH=0;
-  const panel={classList:{contains:()=>true},getBoundingClientRect:()=>({height:PH})};
+  const panel={style:{},classList:{contains:()=>true},getBoundingClientRect:()=>({height:PH})};
   const prev=sandbox.document.querySelector;
   sandbox.document.querySelector=q=> q==='.stage'?stage : q==='.sheet'?sheet
                                    : q==='.buildpanel'?panel : null;
@@ -762,6 +762,23 @@ function phaseEdview(){
       /* panning to the end must not run past the sheet */
       run("ED.pan=1"); for(let i=0;i<400;i++) run('step()'); run('ED.pan=0');
       ok(run('G.cam') <= run('ED.cols*TS-EDVW')+0.5, w+'x'+h+' — panning stops at the last column');
+    }
+    /* the panel grows into whatever the sheet leaves over, and doing so must not
+       move the sheet — measuring the panel to size the level would make the two
+       chase each other forever */
+    for(const [w,h] of [[412,915],[412,1080],[390,844],[1600,900]]){
+      sheet.clientWidth=w; sheet.clientHeight=h; sandbox.window.innerHeight=h;
+      run("G.state='edit'"); run('fit()');
+      const before=run('EDVW')+'x'+run('EDVH')+':'+stage.style.height;
+      const fill=parseFloat(panel.style.minHeight)||0;
+      const sH=parseFloat(stage.style.height)||0;
+      ok(fill>0, w+'x'+h+' — the panel is given the space under the sheet');
+      ok(Math.abs(h-run('BARPX')-sH-fill)<2, w+'x'+h+' — nothing is left blank between them');
+      PH=fill;                                  /* as if the panel had really grown */
+      run('fit()'); run('fit()'); run('fit()');
+      ok(run('EDVW')+'x'+run('EDVH')+':'+stage.style.height===before,
+         w+'x'+h+' — the sheet does not move when the panel grows');
+      PH=0;
     }
     run("G.state='play'"); run('fit()');
     ok(run('EDVW')===VW && run('EDVH')===VH, 'leaving the builder gives play its full window back');

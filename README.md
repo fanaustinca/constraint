@@ -138,9 +138,13 @@ works out the largest tile the space affords and, below **20px**, stops shrinkin
 cropping: it keeps the tiles legible, shows less of the sheet, and pans to reach the rest on
 either axis. A tall phone gets about 21 columns and all 18 rows; a landscape phone gets all
 32 columns and pans down. The **View** row grows ▲▼ buttons exactly when there is something
-above or below to reach. The panel is capped at 44% of the viewport (52% when it is short)
-and scrolls rather than growing until it owns the screen — and the stage sits against the top
-in the builder, since a stage centred in the full height puts its lower half behind the panel. Pausing a sheet you built offers **Back to the builder**
+above or below to reach. The stage sits against the top in the builder, since one centred in the full height puts its
+lower half behind the panel, and the panel then grows *upward* to meet it — on a tall phone
+the level is already as big as the 20px floor allows, so the band under it was simply wasted.
+
+That last part is why the panel's height is never measured to decide the level's size: the
+level is sized from the window and a fixed budget instead. Measure the panel and the two
+chase each other — the level shrinks because the panel grew because the level shrank. Pausing a sheet you built offers **Back to the builder**
 rather than the sheet list.
 
 Three of the palette entries are not tiles but objects with a path: **Platform ↕** and
