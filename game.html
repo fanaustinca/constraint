@@ -314,11 +314,39 @@ body.embed .buildpanel{
   .buildpanel{max-height:min(52vh,340px); padding:7px; gap:6px}
   .buildui{gap:6px}
 }
-@media (max-width:560px){
-  /* 54px swatches wrap to five rows on a narrow phone and push the controls
-     under the fold; at 44px the whole palette costs two rows fewer */
+/* Shorter still — a 640x360 phone on its side — and wrapping the palette at all
+   is the wrong trade. Three rows of swatches cost 130px out of 360 and left the
+   sheet a slit with the controls scrolled off under it. One row that slides
+   sideways costs 46px and hands the rest back to the drawing. */
+@media (max-height:430px){
+  body.embed .buildpanel{max-height:58%; padding:6px; gap:5px}
+  .buildpanel{max-height:min(58vh,240px); padding:6px; gap:5px}
+  .buildui{gap:5px}
+  /* pan-y alone on the panel would intersect with pan-x here and leave the row
+     unable to scroll at all — a touch is allowed only what every ancestor
+     allows. */
+  .buildpanel, body.embed .buildpanel{touch-action:pan-x pan-y}
+  #palette{flex-wrap:nowrap; overflow-x:auto; touch-action:pan-x;
+           overscroll-behavior-x:contain; padding-bottom:3px}
+  #palette button{flex:0 0 auto}
+  .bdesc{min-height:0}
+  /* and the rows under it stop stacking. Landscape has width going spare and
+     none to waste downward, so they sit two across; the palette and the
+     description keep the full span. */
+  .buildui{flex-flow:row wrap; align-items:flex-start; column-gap:14px}
+  .buildui > .brow{flex:1 1 240px; min-width:0}
+  .buildui > .brow:first-child, .bdesc{flex:1 1 100%}
+  .bhint{display:none}
+}
+/* 54px swatches wrap to five rows on a narrow phone and push the controls
+   under the fold; at 44px the whole palette costs two rows fewer. Keyed on
+   either dimension: a landscape phone is wide enough to miss a width rule and
+   short enough to need this more than a portrait one does. */
+@media (max-width:560px), (max-height:560px){
   #palette button{width:44px; font-size:7px; padding:4px 1px 3px}
   #palette canvas{width:21px; height:21px}
+}
+@media (max-width:560px){
   .buildpanel{padding:8px}
   body.embed .bar .field:nth-child(n+6){display:none}
   .ov h1{letter-spacing:.18em; text-indent:.18em}
@@ -3583,7 +3611,13 @@ const MINTILE=20, BARPX=34;    /* the title strip above the sheet */
 /* what the panel is nominally allowed, matching the CSS cap. A function of the
    window and nothing else, so it is the same answer every time it is asked. */
 function edPanelBudget(wh){
-  return wh<=560 ? Math.min(0.52*wh,340) : Math.min(0.44*wh,400);
+  /* Three tiers, and the shortest one is not a scaled-down version of the
+     others. A 360px landscape phone has to fit a title strip, a sheet worth
+     drawing on and a panel worth using into less height than a portrait phone
+     gives the panel alone; below 430 the palette collapses to a single sliding
+     row (see the media block) and the panel can live on a good deal less. */
+  if(wh<=430) return Math.min(0.40*wh,150);
+  return wh<=560 ? Math.min(0.50*wh,300) : Math.min(0.44*wh,400);
 }
 function edView(){
   if(G.state!=='edit') return {w:VW, h:VH};

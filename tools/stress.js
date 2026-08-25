@@ -731,8 +731,12 @@ function phaseEdview(){
   try{
     const VW=run('VW'), VH=run('VH'), TS=run('TS'), ROWS=run('ROWS');
     run("SAVE.unlocked=99; openBuild(); ED.cols=96; ED.grid=blankGrid(96);");
-    const cap=h=> h<=560 ? Math.min(0.52*h,340) : Math.min(0.44*h,400);
-    const screens=[[412,915],[915,412],[820,1180],[1600,900],[1440,700],[390,844],[768,1024]];
+    const cap=h=> h<=430 ? Math.min(0.40*h,150)
+                : h<=560 ? Math.min(0.50*h,300) : Math.min(0.44*h,400);
+    /* the last three are short landscape — the shape that had three rows of
+       swatches sitting on top of a letterbox slit */
+    const screens=[[412,915],[915,412],[820,1180],[1600,900],[1440,700],[390,844],[768,1024],
+                   [633,357],[740,360],[844,390]];
     for(const [w,h] of screens){
       sheet.clientWidth=w; sheet.clientHeight=h; PH=cap(h);
       sandbox.window.innerHeight=h;
@@ -768,7 +772,7 @@ function phaseEdview(){
     /* the panel grows into whatever the sheet leaves over, and doing so must not
        move the sheet — measuring the panel to size the level would make the two
        chase each other forever */
-    for(const [w,h] of [[412,915],[412,1080],[390,844],[1600,900]]){
+    for(const [w,h] of [[412,915],[412,1080],[390,844],[1600,900],[633,357],[740,360]]){
       sheet.clientWidth=w; sheet.clientHeight=h; sandbox.window.innerHeight=h;
       run("G.state='edit'"); run('fit()');
       const before=run('EDVW')+'x'+run('EDVH')+':'+stage.style.height;
