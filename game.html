@@ -1914,9 +1914,10 @@ const ADS={
     ADS.spent();
     ADS.playStop();
     if(!window.PokiSDK){
-      /* No SDK at all. In the artifact and Pages builds there is no ad economy
-         to protect, so the unlock is simply granted. In the Poki build the SDK
-         is the only way to earn one — a blocked ad must not pay out. */
+      /* No SDK at all. In the artifact build there is no ad economy to protect,
+         so the unlock is simply granted. In the shipped build — Poki and Pages
+         alike, which are the same bytes — the SDK is the only way to earn one,
+         and a blocked ad must not pay out. */
       then(!POKI_BUILD); return;
     }
     const wasOn=A.on;
@@ -5148,8 +5149,13 @@ function buildPicker(){
         const tot=partsIn(i), skip=!!SAVE.skipped[i];
         b.innerHTML='<span class="n">'+String(i+1).padStart(3,'0')+'</span>'+
           '<span class="t">'+(lock?(REMIX?'Not cleared':'Locked'):L.name)+'</span>'+
-          (REMIX&&!lock? (owned?'<span class="buytag own">\u2713 open</span>'
-                               :'<span class="buytag">\u25b8 open to remix</span>') : '')+
+          /* "open to remix" named what you would get and so read as a state the
+             sheet was already in — clearing a sheet looked like it had paid for
+             the remix as well. The tag says the price now, and the owned one
+             says it is spent. */
+          (REMIX&&!lock? (owned?'<span class="buytag own">\u2713 unlocked</span>'
+                               :(POKI_BUILD?'<span class="buytag">\u25b8 video to open</span>'
+                                           :'<span class="buytag">\u25b8 open in builder</span>')) : '')+
           '<span class="m">'+(best!==undefined?'<span class="done">'+fmt(best)+'s</span>'
               :(skip?'<span>skipped</span>':'<span>—</span>'))+
           '<span class="parts">'+parts+'/'+tot+'</span></span>';

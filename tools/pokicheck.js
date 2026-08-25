@@ -187,6 +187,37 @@ setTimeout(()=>{
   ok(calls.filter(c=>c==='gameplayStart').length===gs, 'no gameplayStart during a break');
   run("ADS.lock(false); G.state='menu'");
 
+  /* ---- remix is bought, never earned ----
+     Clearing a sheet makes it eligible to be opened in the builder; it does not
+     open it. The two were easy to confuse from the outside because the tag on
+     the card named what you would get rather than what it cost, so a row of
+     cleared sheets looked like a row of unlocked ones. */
+  console.log('\nremix');
+  run(`SAVE.unlocked=600; SAVE.best={}; SAVE.skipped={}; SAVE.unl={th:{},wr:{},lr:{}};
+       for(let i=0;i<40;i++){ G.state='play'; loadLevel(i); G.time=9.5; G.won=0; win(); }`);
+  ok(run("(()=>{ let n=0; for(let i=0;i<40;i++) if(remixOwned(i)) n++; return n; })()")===0,
+     'clearing forty sheets opens none of them for remixing');
+  ok(Object.keys(run("SAVE.unl.lr")).length===0 && Object.keys(run("SAVE.unl.wr")).length===0,
+     'and writes nothing into the unlock store');
+  /* what the card says, captured as the picker builds it */
+  {
+    const seen=[];
+    const prev=sandbox.document.createElement;
+    sandbox.document.createElement=()=>{ const e=el('new'); seen.push(e); return e; };
+    run("REMIX=true; OPEN.clear(); OPEN.add(LEVELS[0].w); buildPicker(); REMIX=false;");
+    sandbox.document.createElement=prev;
+    const tags=seen.map(e=>String(e.innerHTML||''))
+                   .filter(h=>h.indexOf('buytag')>=0)
+                   .map(h=>(h.match(/buytag[^>]*>([^<]*)</)||[])[1]||'');
+    ok(tags.length>0, 'a cleared sheet is tagged in the remix list');
+    const priced=tags.every(t=>/video/i.test(t));
+    ok(priced===isPoki, isPoki? 'and the tag names the video it costs'
+                              : 'and the standalone tag promises no video');
+    ok(!tags.some(t=>/^\s*\u2713/.test(t)), 'none of them reads as already unlocked');
+    console.log('       tag on a cleared, unopened sheet: "'+(tags[0]||'')+'"');
+  }
+  run("SAVE.best={}; SAVE.skipped={}; SAVE.unlocked=1;");
+
   /* ---- rewards ---- */
   console.log('\nrewards');
   const grant=()=>new Promise(r=>run("ADS.rewarded(ok=>{ globalThis.__r=ok; })") || setTimeout(()=>r(run("__r")),20));
