@@ -737,7 +737,8 @@ function phaseEdview(){
       run("G.state='edit'"); run('fit()');
       const vw=run('EDVW');
       ok(vw>0 && vw<=VW, w+'x'+h+' — viewport is '+(vw/TS).toFixed(1)+' columns, never more than play');
-      ok(String(stage.style.aspectRatio)===vw+' / '+VH,
+      ok(run('EDVH')>0 && run('EDVH')<=VH, w+'x'+h+' — and '+(run('EDVH')/TS).toFixed(1)+' rows, never more than the sheet');
+      ok(String(stage.style.aspectRatio)===vw+' / '+run('EDVH'),
          w+'x'+h+' — the box is cut to the same shape the canvas draws');
       /* a click in the far corner must resolve to the last drawn tile */
       const boxW=Math.min(w, h*vw/VH);
@@ -745,7 +746,17 @@ function phaseEdview(){
       sandbox.document.getElementById('c').getBoundingClientRect=()=>r;
       run('G.cam=0');
       const t=run("edTile({clientX:"+(r.width-1)+", clientY:"+(r.height-1)+"})");
-      ok(t.cy===ROWS-1, w+'x'+h+' — the bottom row is reachable');
+      /* every row has to be reachable, whether it fits or has to be panned to */
+      const VH_=run('VH'), vh=run('EDVH');
+      run('G.camY=0; clampCam()');
+      const top=run("edTile({clientX:1, clientY:1})");
+      run('G.camY=1e9; clampCam()');
+      const bot=run("edTile({clientX:1, clientY:"+(r.height-1)+"})");
+      ok(top.cy===0, w+'x'+h+' — the top row is reachable');
+      ok(bot.cy===ROWS-1, w+'x'+h+' — the bottom row is reachable'+(vh<VH_?' (by panning)':''));
+      ok(run('G.camY')<=run('ROWS*TS-EDVH')+0.5 && run('G.camY')>=0,
+         w+'x'+h+' — vertical panning stops at the sheet edge');
+      run('G.camY=0; clampCam()');
       ok(t.cx<=Math.floor(vw/TS) && t.cx>=Math.floor(vw/TS)-2,
          w+'x'+h+' — the right edge maps to the column drawn there');
       /* panning to the end must not run past the sheet */
@@ -753,7 +764,7 @@ function phaseEdview(){
       ok(run('G.cam') <= run('ED.cols*TS-EDVW')+0.5, w+'x'+h+' — panning stops at the last column');
     }
     run("G.state='play'"); run('fit()');
-    ok(run('EDVW')===VW, 'leaving the builder gives play its 32 columns back');
+    ok(run('EDVW')===VW && run('EDVH')===VH, 'leaving the builder gives play its full window back');
   } finally {
     sandbox.document.querySelector=prev;
     run("G.state='menu'");

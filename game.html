@@ -173,6 +173,9 @@ button.free:hover{background:var(--datum); color:var(--ink)}
 .card .m .parts{color:var(--amber)}
 .card.lock{opacity:.32; cursor:not-allowed}
 .card.cur{border-color:var(--accent)}
+/* a sheet you could remix but have not opened yet */
+.card.buy{border-style:dashed; border-color:var(--amber)}
+.card .buytag{font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--amber)}
 
 /* ---- how to ---- */
 .howto{
@@ -503,10 +506,12 @@ body.embed .buildpanel{
         <span class="blabel">View</span>
         <button class="tiny" id="bPanL" aria-label="Pan left">&#9664;</button>
         <button class="tiny" id="bPanR" aria-label="Pan right">&#9654;</button>
+        <button class="tiny" id="bPanU" aria-label="Pan up">&#9650;</button>
+        <button class="tiny" id="bPanD" aria-label="Pan down">&#9660;</button>
         <button class="tiny" id="bPanS">Start</button>
         <button class="tiny" id="bPanE">End</button>
         <span class="bval" id="bPanPos">1</span>
-        <span class="bhint">Hold to pan. Arrow keys work too.</span>
+        <span class="bhint" id="bPanHint">Hold to pan. Arrow keys work too.</span>
       </div>
       <div class="brow">
         <span class="blabel">Width</span>
@@ -1937,6 +1942,7 @@ if(!SAVE.daily || typeof SAVE.daily!=='object' || Array.isArray(SAVE.daily)) SAV
   SAVE.ghosts=g; }
 SAVE.unl = (SAVE.unl && typeof SAVE.unl==='object' && !Array.isArray(SAVE.unl)) ? SAVE.unl : {};
 SAVE.unl.th=flagMap(SAVE.unl.th); SAVE.unl.wr=flagMap(SAVE.unl.wr);
+SAVE.unl.lr=flagMap(SAVE.unl.lr);
 SAVE.seen=flagMap(SAVE.seen);
 A.on=!SAVE.mute;
 }
@@ -2693,8 +2699,13 @@ function step(){
        exactly where the build panel is pinned — they are unreachable there and
        absent altogether on a mouse, so the panel carries its own pan buttons */
     const sp=(IN.r?7:0)-(IN.l?7:0)+(ED.pan||0)*9;
-    G.cam=Math.max(0,Math.min(Math.max(0,ED.cols*TS-EDVW), G.cam+sp));
-    const pp=$('bPanPos'); if(pp) pp.textContent=String(Math.round(G.cam/TS)+1);
+    const sv=(ED.panY||0)*9;
+    G.cam=(G.cam||0)+sp; G.camY=(G.camY||0)+sv;
+    clampCam();
+    const pp=$('bPanPos');
+    if(pp) pp.textContent = (EDVH<VH)
+      ? (Math.round(G.cam/TS)+1)+','+(Math.round(G.camY/TS)+1)
+      : String(Math.round(G.cam/TS)+1);
     return;
   }
   if(G.msgT>0) G.msgT--;
@@ -3541,34 +3552,41 @@ const cv=document.getElementById('c'), ctx=cv.getContext('2d');
 /* The editor's viewport width, in world units. A plain variable and not a
    field on ED, because fit() runs at load and ED is declared further down —
    reaching for it here throws before the game ever draws a frame. */
-let EDVW=VW;
-/* How many world units of width the editor shows. Play is always 32 columns,
-   but the builder has no such contract, and on a tall narrow screen a 32:18
-   window turns the sheet into a letterbox slit — eighteen rows inside 232px on
-   a phone is a 13px tile, too small to aim at. So the editor gives the rows a
-   workable height and shows fewer columns, panning to reach the rest. */
-function edViewW(){
-  if(G.state!=='edit') return VW;
+let EDVW=VW, EDVH=VH;
+/* The size of the window the builder draws through, in world units. Play is
+   always 32 columns by 18 rows; the builder has no such contract, and holding
+   it to one is what made a phone in portrait show eighteen rows inside 232px —
+   a 13px tile, too small to aim at.
+
+   So: work out the largest tile the space affords, and if that is still too
+   small to hit, stop shrinking and start cropping. Below MINTILE the editor
+   keeps the tiles legible and shows less of the sheet, panning to reach the
+   rest, on both axes. Above it everything fits and nothing pans. */
+const MINTILE=20;
+function edView(){
+  if(G.state!=='edit') return {w:VW, h:VH};
   const q=t=>{ try{ return document.querySelector&&document.querySelector(t); }catch(e){ return null; } };
-  const sh=q('.sheet'); if(!sh) return VW;
-  const bw=sh.clientWidth; if(!(bw>0)) return VW;
-  /* the height the stage may occupy: the window, less whatever the panel and
-     the top bar have taken. Measured, not assumed, but capped so a tall panel
+  const sh=q('.sheet'); if(!sh) return {w:VW, h:VH};
+  const bw=sh.clientWidth; if(!(bw>0)) return {w:VW, h:VH};
+  /* the height the stage may occupy: the window, less what the panel and the
+     top bar have taken. Measured, not assumed, and capped so a tall panel
      cannot squeeze the sheet to nothing. */
   const pan=q('.buildpanel');
   let used=0;
   try{ if(pan && pan.classList.contains('on')) used=pan.getBoundingClientRect().height||0; }catch(e){}
   const wh=window.innerHeight||VH;
-  const bh=Math.max(wh*0.3, wh-Math.min(used, wh*0.62)-46);
-  /* fill the height with all ROWS, then see how many columns the width affords */
-  const w=bw*VH/bh;
-  return Math.max(12*TS, Math.min(VW, Math.round(w)));
+  const bh=Math.max(wh*0.28, wh-Math.min(used, wh*0.6)-46);
+  const fit=Math.min(bw/VW, bh/VH);            /* scale that shows the whole sheet */
+  const z=Math.max(fit, MINTILE/TS);           /* never below a tile you can hit */
+  return { w: Math.max(10*TS, Math.min(VW, Math.round(bw/z))),
+           h: Math.max(6*TS,  Math.min(VH, Math.round(bh/z))) };
 }
 function fit(){
   const s=Math.min(2,window.devicePixelRatio||1);
-  EDVW=edViewW();
-  const vw=EDVW;
-  cv.width=vw*s; cv.height=VH*s; ctx.setTransform(s,0,0,s,0,0);
+  const v=edView(); EDVW=v.w; EDVH=v.h;
+  const vw=EDVW, vh=EDVH;
+  cv.width=vw*s; cv.height=vh*s; ctx.setTransform(s,0,0,s,0,0);
+  clampCam();
   /* In the embed the stage used to be width:100%/height:100% held in shape by
      two viewport-unit caps pulling against each other. That is only ever right
      while the sheet box IS the viewport, and an ad break does not promise that:
@@ -3582,13 +3600,27 @@ function fit(){
   if(!st||!sh) return;
   /* the box has to match whatever the canvas is now shaped like, or the sheet
      is stretched again — the same fault an ad break used to cause */
-  st.style.aspectRatio = vw+' / '+VH;
-  if(!document.body.classList.contains('embed')){ st.style.width=''; st.style.height=''; return; }
-  const bw=sh.clientWidth, bh=sh.clientHeight;
-  if(bw<=0||bh<=0) return;                       /* hidden behind an ad: ask again later */
-  const sc=Math.min(bw/vw, bh/VH);
+  st.style.aspectRatio = vw+' / '+vh;
+  /* in the builder the panel is pinned over the bottom of the sheet, so a stage
+     centred in the full height puts its lower half behind the panel. Sit it
+     against the top instead, and only for as long as the panel is up. */
+  const edit=(G.state==='edit');
+  st.style.marginTop = edit? '0' : '';
+  st.style.marginBottom = edit? 'auto' : '';
+  if(!document.body.classList.contains('embed')){ st.style.width=''; st.style.height=''; syncPanUI(); return; }
+  const bw=sh.clientWidth, bh0=sh.clientHeight;
+  if(bw<=0||bh0<=0) return;                      /* hidden behind an ad: ask again later */
+  let bh=bh0;
+  if(edit){
+    const pan=(()=>{ try{ return document.querySelector('.buildpanel'); }catch(e){ return null; } })();
+    let used=0;
+    try{ if(pan && pan.classList.contains('on')) used=pan.getBoundingClientRect().height||0; }catch(e){}
+    bh=Math.max(bh0*0.35, bh0-Math.min(used, bh0*0.6));
+  }
+  const sc=Math.min(bw/vw, bh/vh);
   st.style.width=Math.round(vw*sc)+'px';
-  st.style.height=Math.round(VH*sc)+'px';
+  st.style.height=Math.round(vh*sc)+'px';
+  syncPanUI();          /* a resize can add or remove the need to pan down */
 }
 fit(); addEventListener('resize',fit);
 addEventListener('orientationchange',fit);
@@ -3612,8 +3644,8 @@ function rr(x,y,w,h,r){ ctx.beginPath();
 function dash(on){ ctx.setLineDash(on?[3,3]:[]); }
 
 function drawGrid(cam){
-  const gw=EDVW;
-  ctx.fillStyle=C.ink; ctx.fillRect(cam-24,-24,gw+48,VH+48);
+  const gw=EDVW, gh=(G.state==='edit')?EDVH:VH, gy=(G.state==='edit')?(G.camY||0):0;
+  ctx.fillStyle=C.ink; ctx.fillRect(cam-24,gy-24,gw+48,gh+48);
   const c0=Math.floor(cam/TS), c1=c0+Math.ceil(gw/TS)+1;
   ctx.lineWidth=1;
   /* parallax datum marks, drifting at half rate */
@@ -4415,7 +4447,7 @@ function loadCustom(g,cols){
 function edTile(e){
   const r=cv.getBoundingClientRect();
   const x=(e.clientX-r.left)/r.width*EDVW + G.cam;
-  const y=(e.clientY-r.top)/r.height*VH;
+  const y=(e.clientY-r.top)/r.height*EDVH + (G.camY||0);
   return {cx:Math.floor(x/TS), cy:Math.floor(y/TS)};
 }
 function edPaint(e){
@@ -4498,15 +4530,16 @@ function edObject(ch, x, y){
   ctx.restore();
 }
 function drawEditor(){
-  const cam=Math.round(G.cam);
-  ctx.save(); ctx.translate(-cam,0);
+  const cam=Math.round(G.cam), camY=Math.round(G.camY||0);
+  ctx.save(); ctx.translate(-cam,-camY);
   drawGrid(cam);
   G.grid=ED.grid; COLS=ED.cols; G.drawMask=null; G.revealCols=undefined; G.rmode='normal';
   /* pin the timed tiles to their present state — what you place is what you see */
   G.phase=0; G.doorOpen=0; G.phaseT=0; G.broken=G.broken||new Map(); G.crumbs=G.crumbs||new Map();
   drawTiles(cam);
   const k0=Math.max(0,Math.floor(cam/TS)-1), k1=Math.min(ED.cols-1,Math.floor((cam+EDVW)/TS)+1);
-  for(let cy=0;cy<ROWS;cy++) for(let cx=k0;cx<=k1;cx++)
+  const r0=Math.max(0,Math.floor(camY/TS)-1), r1=Math.min(ROWS-1,Math.floor((camY+EDVH)/TS)+1);
+  for(let cy=r0;cy<=r1;cy++) for(let cx=k0;cx<=k1;cx++)
     edObject(ED.grid[cy][cx], cx*TS, cy*TS);
   ctx.strokeStyle='rgba(255,122,47,.5)'; ctx.lineWidth=1;
   ctx.strokeRect(0.5,0.5,ED.cols*TS-1,ROWS*TS-1);
@@ -4839,7 +4872,34 @@ function showDone(isBest){
   $('btnNext').textContent=(i+1<LEVELS.length)?'Next sheet':'Sheet list';
   showOv('ovDone');
 }
+/* the builder's camera, clamped to the sheet on both axes */
+/* Up and down only mean something when the sheet is taller than the window.
+   On a screen that shows all eighteen rows they would be two dead buttons. */
+function syncPanUI(){
+  try{
+    const on=(EDVH<VH);
+    ['bPanU','bPanD'].forEach(id=>{ const b=$(id); if(b) b.classList.toggle('hidden', !on); });
+    const h=$('bPanHint');
+    if(h) h.textContent = on ? 'Hold to pan the sheet. Arrow keys pan across.'
+                             : 'Hold to pan. Arrow keys work too.';
+  }catch(e){}
+}
+function clampCam(){
+  /* ED is declared below fit(), and fit() runs at load — reading it here is a
+     dead-zone throw, which typeof does not save you from either. */
+  let cols=VCOLS;
+  try{ if(ED && ED.cols) cols=ED.cols; }catch(e){}
+  G.cam=Math.max(0, Math.min(Math.max(0, cols*TS-EDVW), G.cam||0));
+  G.camY=Math.max(0, Math.min(Math.max(0, ROWS*TS-EDVH), G.camY||0));
+}
 const OPEN=new Set();
+/* One sheet, one video. A set bought outright under the old rule still counts,
+   so nobody loses what they already paid for. */
+function remixOwned(i){
+  if(SAVE.unl.lr[i]) return true;
+  const L=LEVELS[i];
+  return !!(L && SAVE.unl.wr[L.w]);
+}
 /* One sheet from each side world is open from the very start. The acts are a
    long road, and someone who wants to see what Space or Code actually is should
    not have to walk all of it first. A taster grants no progress of its own —
@@ -4898,41 +4958,45 @@ function buildPicker(){
     const open=OPEN.has(wi);
     const sec=document.createElement('div'); sec.className='world';
     const head=document.createElement('button');
-    /* in remix mode a set opens once, for a video — the sheets themselves
-       are still there to play for nothing, this only buys taking them apart */
-    const rlock=REMIX && !SAVE.unl.wr[wi];
-    head.className='worldbtn'+(open&&!rlock?' open':'')+(reachable?'':' lock');
+    /* Remixing is bought one sheet at a time. It used to be one video for a
+       whole set of eighty, which is a strange thing to ask someone to pay for
+       sight unseen — you want the one sheet you liked, not the other seventy
+       nine. The set itself just opens and closes like any other. */
+    head.className='worldbtn'+(open?' open':'')+(reachable?'':' lock');
     head.disabled=!reachable;
-    head.innerHTML='<b>'+(rlock?'\u25b8':(open?'\u2212':'+'))+'</b><em>'+w.code+'</em>'+
-                   '<i></i><span>'+(rlock?'unlock to remix':done+' / '+idx.length)+'</span>';
-    head.onclick=()=>{
-      if(rlock){
-        askAd('optional unlock', 'Open '+w.code+' for remixing?',
-          'Every sheet in this set you have already cleared, loaded into the builder to take apart.',
-          ()=>{ SAVE.unl.wr[wi]=1; OPEN.add(wi); save(); },
-          ()=>{ buildPicker(); showOv('ovLevels'); });
-        return;
-      }
-      open?OPEN.delete(wi):OPEN.add(wi); buildPicker();
-    };
+    const runlCount=REMIX ? idx.filter(a=>remixOwned(a[1])).length : 0;
+    head.innerHTML='<b>'+(open?'\u2212':'+')+'</b><em>'+w.code+'</em>'+
+                   '<i></i><span>'+(REMIX? runlCount+' / '+idx.length+' open'
+                                          : done+' / '+idx.length)+'</span>';
+    head.onclick=()=>{ open?OPEN.delete(wi):OPEN.add(wi); buildPicker(); };
     sec.appendChild(head);
-    if(open && !rlock){
+    if(open){
       const cards=document.createElement('div'); cards.className='cards';
       idx.forEach(([L,i])=>{
         /* remixing a sheet means having beaten it, not merely reached it */
         const lock=REMIX ? (SAVE.best[i]===undefined && !SAVE.skipped[i]) : !sheetOpen(i);
+        const owned=REMIX && !lock && remixOwned(i);
         const b=document.createElement('button');
-        b.className='card'+(lock?' lock':'')+(i===G.lvl?' cur':'');
+        b.className='card'+(lock?' lock':'')+(i===G.lvl?' cur':'')+
+                    (REMIX&&!lock&&!owned?' buy':'');
         b.disabled=lock;
         const rawBest=+SAVE.best[i], best=isFinite(rawBest)?rawBest:undefined;
         const parts=Math.max(0,Math.min(99,Math.floor(+SAVE.parts[i])||0));
         const tot=partsIn(i), skip=!!SAVE.skipped[i];
         b.innerHTML='<span class="n">'+String(i+1).padStart(3,'0')+'</span>'+
           '<span class="t">'+(lock?(REMIX?'Not cleared':'Locked'):L.name)+'</span>'+
+          (REMIX&&!lock&&!owned?'<span class="buytag">\u25b8 open to remix</span>':'')+
           '<span class="m">'+(best!==undefined?'<span class="done">'+fmt(best)+'s</span>'
               :(skip?'<span>skipped</span>':'<span>—</span>'))+
           '<span class="parts">'+parts+'/'+tot+'</span></span>';
-        if(!lock) b.onclick=()=> REMIX?remixPick(i):play(i);
+        if(!lock) b.onclick=()=>{
+          if(!REMIX) return play(i);
+          if(owned) return remixPick(i);
+          askAd('optional unlock', 'Open '+L.name+' in the builder?',
+            'Sheet '+String(i+1).padStart(3,'0')+', its geometry loaded in to take apart. Yours for good once it opens.',
+            ()=>{ SAVE.unl.lr[i]=1; save(); },
+            ok=>{ if(ok){ remixPick(i); return; } buildPicker(); showOv('ovLevels'); });
+        };
         cards.appendChild(b);
       });
       sec.appendChild(cards);
@@ -5004,6 +5068,7 @@ function openBuild(){
   G.state='edit'; G.cam=0; showOv(null); $('buildPanel').classList.add('on');
   paintPalette(); paintThemes();
   try{ fit(); }catch(e){}      /* the editor window is not the play window */
+  syncPanUI();
 }
 function paintThemes(){
   const p=$('bThemes'); p.innerHTML='';
@@ -5290,7 +5355,7 @@ $('btnSkip').onclick=()=>{
   if(G.state!=='pause') return;
   /* this used to call ADS.rewarded() straight out, so the one unlock a player
      meets mid-sheet was also the one that never said what it would cost */
-  askAd('skip this sheet', 'Skip '+(LEVELS[G.lvl]?LEVELS[G.lvl].n:'this sheet')+'?',
+  askAd('skip this sheet', 'Skip '+((LEVELS[G.lvl]&&LEVELS[G.lvl].name)||'this sheet')+'?',
     'It stays in the list and you can come back to it whenever you like.',
     ()=>skipLevel(),
     ok=>{ if(!ok && G.state==='pause') showOv('ovPause'); });
@@ -5310,9 +5375,19 @@ $('btnToBuild').onclick=()=>{ if(G.lvl===-1) openBuild(); };
     b.onclick=()=>{ if(ED.pan) return;
       G.cam=Math.max(0,Math.min(edge(), G.cam+dir*EDVW*0.75)); };
   };
+  const holdY=(id,dir)=>{
+    const b=$(id); if(!b) return;
+    let held=false;
+    b.addEventListener('pointerdown',e=>{ e.preventDefault(); held=true; ED.panY=dir; });
+    const off=()=>{ if(!held) return; held=false; ED.panY=0; };
+    ['pointerup','pointercancel','pointerleave'].forEach(t=>b.addEventListener(t,off));
+    b.onclick=()=>{ if(ED.panY) return;
+      G.camY=(G.camY||0)+dir*EDVH*0.75; clampCam(); };
+  };
   hold('bPanL',-1); hold('bPanR',1);
-  $('bPanS').onclick=()=>{ ED.pan=0; G.cam=0; };
-  $('bPanE').onclick=()=>{ ED.pan=0; G.cam=edge(); };
+  holdY('bPanU',-1); holdY('bPanD',1);
+  $('bPanS').onclick=()=>{ ED.pan=0; ED.panY=0; G.cam=0; G.camY=0; };
+  $('bPanE').onclick=()=>{ ED.pan=0; ED.panY=0; G.cam=edge(); };
 })();
 $('btnRetry').onclick=()=>{ G.state='play'; showOv(null); reloadSheet(); };
 $('btnNext').onclick=nextLevel;
@@ -5389,6 +5464,7 @@ arm($('btnWipe'), 'Erase — sure?', ()=>{
   SAVE={unlocked:1,best:{},parts:{},skipped:{},cuts:{},rank:0,daily:null,ghosts:{},
         dev:0,mute:SAVE.mute,unl:SAVE.unl};
   SAVE.unl=SAVE.unl||{}; SAVE.unl.th=SAVE.unl.th||{}; SAVE.unl.wr=SAVE.unl.wr||{};
+  SAVE.unl.lr=SAVE.unl.lr||{};
   save(); buildPicker(); setDevTag();
 });
 $('sheetCount').textContent=(SAVE.unlocked>40?LEVELS.length+' sheets · 5 acts':'40 sheets · 5 constraints');
@@ -5436,7 +5512,7 @@ function loop(ts){
      re-cut on every crossing between them — done here rather than on the
      buttons, because Done, Test sheet, Esc and Back are four separate doors */
   const ed=(G.state==='edit');
-  if(ed!==fit._ed){ fit._ed=ed; try{ fit(); }catch(e){} }
+  if(ed!==fit._ed){ fit._ed=ed; try{ fit(); }catch(e){} syncPanUI(); }
   const dt=Math.min(60,ts-last); last=ts;
   if(ADS.inAd){ acc=0; draw(); return; }   /* frozen while a break is on screen */
   acc+=dt;

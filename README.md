@@ -132,12 +132,15 @@ slots, and test-play it in place. A **View** row pans the camera — hold ◀ �
 to jump a screen, or go straight to Start or End — because arrow keys are no use on a phone
 and the on-screen pads sit underneath the panel.
 
-Play is always 32 columns wide; the builder is not. A sheet is eighteen rows tall whatever
-the screen, so a 32:18 window on a phone in portrait gives them 232px between them — a 13px
-tile, too small to aim at. The editor instead gives the rows a workable height and shows
-however many columns the width then affords, panning to reach the rest: about 15 columns at
-26px on a tall phone, the full 32 on anything landscape. The panel is capped at 44% of the
-viewport and scrolls, rather than growing until it owns the screen. Pausing a sheet you built offers **Back to the builder**
+Play is always a 32×18 window; the builder is not. Holding it to one is what gave a phone in
+portrait eighteen rows inside 232px — a 13px tile, too small to aim at. The editor instead
+works out the largest tile the space affords and, below **20px**, stops shrinking and starts
+cropping: it keeps the tiles legible, shows less of the sheet, and pans to reach the rest on
+either axis. A tall phone gets about 21 columns and all 18 rows; a landscape phone gets all
+32 columns and pans down. The **View** row grows ▲▼ buttons exactly when there is something
+above or below to reach. The panel is capped at 44% of the viewport (52% when it is short)
+and scrolls rather than growing until it owns the screen — and the stage sits against the top
+in the builder, since a stage centred in the full height puts its lower half behind the panel. Pausing a sheet you built offers **Back to the builder**
 rather than the sheet list.
 
 Three of the palette entries are not tiles but objects with a path: **Platform ↕** and
@@ -146,7 +149,9 @@ on both sides quietly becomes the ledge it looks like — and **Unstable** bobs 
 and sags under your weight. A horizontal run of the same mark makes one wider platform.
 Remixing an official sheet brings its platforms across as these marks.
 
-**Remix** opens an official sheet's geometry in the editor to take apart. **Themes** re-skin
+**Remix** opens an official sheet's geometry in the editor to take apart, one sheet per video —
+you want the sheet you liked, not the other seventy-nine in its set. Sets bought outright under
+the older whole-world rule still count, so nothing already paid for is lost. **Themes** re-skin
 your sheet with a world's rules: Blueprint and Cursor are free, and Space, Code, Whiteout,
 Winter and Chaos are optional unlocks. The editor is fully usable without unlocking anything.
 
