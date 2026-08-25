@@ -41,7 +41,7 @@ const store={};
 const sandbox={
   console,
   document:{ getElementById:id=>el(id), createElement:()=>el(), querySelectorAll:()=>[],
-             addEventListener:noop, body:el() },
+             querySelector:()=>null, addEventListener:noop, body:el() },
   window:{ devicePixelRatio:1, AudioContext:null },
   addEventListener:noop, removeEventListener:noop,
   matchMedia:()=>({matches:false, addEventListener:noop}),

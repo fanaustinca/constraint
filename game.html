@@ -289,9 +289,11 @@ body.embed .sheet{
   display:flex; align-items:center; justify-content:center; background:var(--ink);
 }
 body.embed .sheet::before,body.embed .sheet::after{display:none}
+/* fit() sets the pixel size; these are the fallback shape for the moment before
+   it first runs, and for anything that leaves script out */
 body.embed .stage{
-  width:100%; height:100%;
-  max-width:calc(100dvh * 16 / 9); max-height:calc(100vw * 9 / 16);
+  width:100%; height:auto; aspect-ratio:32/18;
+  max-width:calc(100dvh * 16 / 9); max-height:100%;
   margin:auto;
 }
 body.embed .buildpanel{
@@ -1828,6 +1830,9 @@ const ADS={
     ADS.inAd=on;
     try{ document.body.classList.toggle('adlock', on); }catch(e){}
     if(on){ A.on=false; clearInput(); }
+    /* the break may have handed the game back in a box of another size, and
+       nothing fires a window resize when it does */
+    else try{ fit(); }catch(e){}
   },
   break(then){
     ADS.playStop();                      /* gameplayStop always precedes an ad */
@@ -3528,8 +3533,38 @@ const C={ink:'#0A0F16',grid:'#131D28',major:'#1D2C3C',line:'#5E8FB5',dim:'#3A5A7
 const REDUCED=(()=>{ try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }
                      catch(e){ return false; } })();
 const cv=document.getElementById('c'), ctx=cv.getContext('2d');
-function fit(){ const s=Math.min(2,window.devicePixelRatio||1); cv.width=VW*s; cv.height=VH*s; ctx.setTransform(s,0,0,s,0,0); }
+function fit(){
+  const s=Math.min(2,window.devicePixelRatio||1);
+  cv.width=VW*s; cv.height=VH*s; ctx.setTransform(s,0,0,s,0,0);
+  /* In the embed the stage used to be width:100%/height:100% held in shape by
+     two viewport-unit caps pulling against each other. That is only ever right
+     while the sheet box IS the viewport, and an ad break does not promise that:
+     the game comes back inside a container of some other size, the caps no
+     longer describe it, and the sheet is drawn stretched. Measure the space
+     that actually exists and put an exact 32:18 box in the middle of it. The
+     canvas fills that box exactly, which is also what edPaint() assumes when
+     it turns a click back into a column. */
+  const q=s=>{ try{ return document.querySelector&&document.querySelector(s); }catch(e){ return null; } };
+  const st=q('.stage'), sh=q('.sheet');
+  if(!st||!sh) return;
+  if(!document.body.classList.contains('embed')){ st.style.width=''; st.style.height=''; return; }
+  const bw=sh.clientWidth, bh=sh.clientHeight;
+  if(bw<=0||bh<=0) return;                       /* hidden behind an ad: ask again later */
+  const sc=Math.min(bw/VW, bh/VH);
+  st.style.width=Math.round(VW*sc)+'px';
+  st.style.height=Math.round(VH*sc)+'px';
+}
 fit(); addEventListener('resize',fit);
+addEventListener('orientationchange',fit);
+/* a window resize is not the only way the box changes size — an ad break can
+   hand the game back inside a different container without the window moving at
+   all, and that fires no resize event anywhere */
+try{
+  if(window.ResizeObserver){
+    const ro=new ResizeObserver(()=>fit());
+    const sh=document.querySelector('.sheet'); if(sh) ro.observe(sh);
+  }
+}catch(e){}
 
 const hatch=(()=>{ const h=document.createElement('canvas'); h.width=h.height=8;
   const g=h.getContext('2d'); g.strokeStyle='rgba(94,143,181,0.13)'; g.lineWidth=1;
