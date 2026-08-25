@@ -176,6 +176,8 @@ button.free:hover{background:var(--datum); color:var(--ink)}
 /* a sheet you could remix but have not opened yet */
 .card.buy{border-style:dashed; border-color:var(--amber)}
 .card .buytag{font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--amber)}
+/* one you already paid for, so it is plain why it opens without asking */
+.card .buytag.own{color:var(--datum)}
 
 /* ---- how to ---- */
 .howto{
@@ -290,7 +292,20 @@ body.embed .bar{
   border:0; background:linear-gradient(180deg, rgba(10,15,22,.82), rgba(10,15,22,0));
   padding:6px 10px; font-size:10px;
 }
+/* The legend is the only place a keyboard player is told what they have — dash
+   appears in it when dash arrives, and double jump does now too. Hiding it
+   wholesale in the embed left a desktop player, who gets no on-screen pad
+   either, with nothing at all. Float it over the bottom the way the bar floats
+   over the top, under the build panel so the builder still covers it. */
 body.embed .cmd{display:none}
+@media (pointer:fine){
+  body.embed .cmd{
+    display:flex; position:absolute; z-index:5; left:0; right:0; bottom:0;
+    justify-content:center; padding:6px 10px; pointer-events:none;
+    background:linear-gradient(0deg, rgba(10,15,22,.82), rgba(10,15,22,0));
+  }
+  body.embed.tightv .cmd{display:none}   /* no room to spend on prose */
+}
 body.embed .sheet{
   flex:1; border:0; padding:0; min-height:0;
   display:flex; align-items:center; justify-content:center; background:var(--ink);
@@ -307,45 +322,42 @@ body.embed .buildpanel{
   position:absolute; z-index:7; left:0; right:0; bottom:0;
   max-height:44%; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y;
 }
-/* a short landscape phone has almost no height to give either way, so spend
-   what there is on the sheet and make the panel itself denser */
-@media (max-height:560px){
-  body.embed .buildpanel{max-height:52%; padding:7px; gap:6px}
-  .buildpanel{max-height:min(52vh,340px); padding:7px; gap:6px}
-  .buildui{gap:6px}
-}
-/* Shorter still — a 640x360 phone on its side — and wrapping the palette at all
-   is the wrong trade. Three rows of swatches cost 130px out of 360 and left the
-   sheet a slit with the controls scrolled off under it. One row that slides
-   sideways costs 46px and hands the rest back to the drawing. */
-@media (max-height:430px){
-  body.embed .buildpanel{max-height:58%; padding:6px; gap:5px}
-  .buildpanel{max-height:min(58vh,240px); padding:6px; gap:5px}
-  .buildui{gap:5px}
-  /* pan-y alone on the panel would intersect with pan-x here and leave the row
-     unable to scroll at all — a touch is allowed only what every ancestor
-     allows. */
-  .buildpanel, body.embed .buildpanel{touch-action:pan-x pan-y}
-  #palette{flex-wrap:nowrap; overflow-x:auto; touch-action:pan-x;
-           overscroll-behavior-x:contain; padding-bottom:3px}
-  #palette button{flex:0 0 auto}
-  .bdesc{min-height:0}
-  /* and the rows under it stop stacking. Landscape has width going spare and
-     none to waste downward, so they sit two across; the palette and the
-     description keep the full span. */
-  .buildui{flex-flow:row wrap; align-items:flex-start; column-gap:14px}
-  .buildui > .brow{flex:1 1 240px; min-width:0}
-  .buildui > .brow:first-child, .bdesc{flex:1 1 100%}
-  .bhint{display:none}
-}
-/* 54px swatches wrap to five rows on a narrow phone and push the controls
-   under the fold; at 44px the whole palette costs two rows fewer. Keyed on
-   either dimension: a landscape phone is wide enough to miss a width rule and
-   short enough to need this more than a portrait one does. */
-@media (max-width:560px), (max-height:560px){
-  #palette button{width:44px; font-size:7px; padding:4px 1px 3px}
-  #palette canvas{width:21px; height:21px}
-}
+/* A short screen has almost no height to give either way, so spend what there
+   is on the sheet and make the panel denser.
+
+   These are classes and not media queries on purpose. A media query and a vh
+   unit both describe the window, and on Poki the game is handed a container the
+   site sizes — at 640x360 inside a taller page every height query missed and the
+   palette kept all three of its full-size rows. fit() already measures the real
+   box for exactly this reason; edDensity() hangs the answer on <body>. */
+body.shortv .buildpanel{max-height:340px; padding:7px; gap:6px}
+body.embed.shortv .buildpanel{max-height:52%}
+body.shortv .buildui{gap:6px}
+/* Shorter still — 640x360 — and wrapping the palette at all is the wrong trade.
+   Three rows of swatches cost 130px out of 360 and left the sheet a slit with
+   the controls scrolled off under it. One row that slides sideways costs 46px
+   and hands the rest back to the drawing. */
+body.tightv .buildpanel{max-height:240px; padding:6px; gap:5px; touch-action:pan-x pan-y}
+body.embed.tightv .buildpanel{max-height:58%}
+/* pan-y alone on the panel would intersect with pan-x below and leave the row
+   unable to scroll at all — a touch is allowed only what every ancestor allows. */
+body.tightv #palette{flex-wrap:nowrap; overflow-x:auto; touch-action:pan-x;
+  overscroll-behavior-x:contain; padding-bottom:3px}
+body.tightv #palette button{flex:0 0 auto}
+body.tightv .bdesc{min-height:0}
+/* and the rows under it stop stacking. A short box is nearly always a wide one,
+   so they sit two across; the palette and description keep the full span. */
+body.tightv .buildui{flex-flow:row wrap; align-items:flex-start; column-gap:14px; gap:5px}
+body.tightv .buildui > .brow{flex:1 1 240px; min-width:0}
+body.tightv .buildui > .brow:first-child, body.tightv .bdesc{flex:1 1 100%}
+body.tightv .bhint{display:none}
+/* 54px swatches wrap to five rows in a narrow box and push the controls under
+   the fold; at 44px the whole palette costs two rows fewer. Either dimension
+   triggers it: a box on its side is wide enough to miss a width rule and short
+   enough to need this more than a tall one does. */
+body.narrowv #palette button, body.shortv #palette button{width:44px; font-size:7px; padding:4px 1px 3px}
+body.narrowv #palette canvas, body.shortv #palette canvas{width:21px; height:21px}
+body.narrowv .buildpanel{padding:8px}
 @media (max-width:560px){
   .buildpanel{padding:8px}
   body.embed .bar .field:nth-child(n+6){display:none}
@@ -567,6 +579,7 @@ body.embed .buildpanel{
   <div class="cmd">
     <span class="grp"><kbd>&larr;&rarr;</kbd> move</span>
     <span class="grp"><kbd>SPACE</kbd> jump</span>
+    <span class="grp hidden" id="cmdDJ"><kbd>SPACE</kbd>&times;2 double jump</span>
     <span class="grp hidden" id="cmdDash"><kbd>SHIFT</kbd> dash</span>
     <span class="grp"><kbd>R</kbd> restart</span>
     <span class="grp"><kbd>ESC</kbd> pause</span>
@@ -3610,6 +3623,37 @@ let EDVW=VW, EDVH=VH;
 const MINTILE=20, BARPX=34;    /* the title strip above the sheet */
 /* what the panel is nominally allowed, matching the CSS cap. A function of the
    window and nothing else, so it is the same answer every time it is asked. */
+/* The size of the box the game actually has, which is not the window's. On Poki
+   the site hands the game a container and resizes it; a vh unit and a media
+   query both describe the window around that container, so at 640x360 inside a
+   taller page every height rule missed and the palette kept three full rows.
+   This is the same fault that drew the sheet stretched after an ad break: measure
+   the box, never the viewport. */
+function edSpace(){
+  let sh=null;
+  try{ sh=document.querySelector && document.querySelector('.sheet'); }catch(e){}
+  let w=0,h=0;
+  if(sh){
+    const r=(sh.getBoundingClientRect && sh.getBoundingClientRect()) || null;
+    w=Math.round((r && r.width) || sh.clientWidth || 0);
+    /* only in the embed is .sheet a box of its own height; in the standalone
+       page it is as tall as the stage inside it, which is circular */
+    let em=false; try{ em=document.body.classList.contains('embed'); }catch(e){}
+    if(em) h=Math.round((r && r.height) || sh.clientHeight || 0);
+  }
+  if(!(w>0)) w=window.innerWidth||VW;
+  if(!(h>0)) h=window.innerHeight||VH;
+  return {w:w, h:h};
+}
+/* What the box is too small for, said once on <body> so the stylesheet can read
+   it. Toggling only on change keeps this off the layout path when nothing moved. */
+function edDensity(w,h){
+  let cl=null; try{ cl=document.body.classList; }catch(e){}
+  if(!cl || !cl.toggle) return;
+  cl.toggle('tightv',  h<=430);
+  cl.toggle('shortv',  h<=560);
+  cl.toggle('narrowv', w<=560);
+}
 function edPanelBudget(wh){
   /* Three tiers, and the shortest one is not a scaled-down version of the
      others. A 360px landscape phone has to fit a title strip, a sheet worth
@@ -3624,23 +3668,44 @@ function edView(){
   const q=t=>{ try{ return document.querySelector&&document.querySelector(t); }catch(e){ return null; } };
   const sh=q('.sheet'); if(!sh) return {w:VW, h:VH};
   const bw=sh.clientWidth; if(!(bw>0)) return {w:VW, h:VH};
-  /* The height the sheet may occupy. This is deliberately computed from the
-     window alone and never from the panel's measured height: the panel is
-     about to be grown to fill whatever the sheet leaves over, and a size that
-     was derived from measuring it would then feed back into itself — the level
-     would shrink because the panel grew because the level shrank. */
-  const wh=window.innerHeight||VH;
+  /* The height the sheet may occupy. Measured from the box the game was handed
+     rather than the window around it, and never from the panel: the panel is
+     about to be grown to fill whatever the sheet leaves over, and a size derived
+     from measuring it would feed back into itself — the level would shrink
+     because the panel grew because the level shrank. Nothing here reads the
+     panel, and in the embed it is out of flow, so the box does not move when it
+     does. */
+  const wh=edSpace().h;
   const bh=Math.max(wh*0.28, wh-edPanelBudget(wh)-46);
   const fit=Math.min(bw/VW, bh/VH);            /* scale that shows the whole sheet */
   const z=Math.max(fit, MINTILE/TS);           /* never below a tile you can hit */
   return { w: Math.max(10*TS, Math.min(VW, Math.round(bw/z))),
            h: Math.max(6*TS,  Math.min(VH, Math.round(bh/z))) };
 }
+/* The canvas is 768 world units across whatever it is drawn at, and the backing
+   store used to be that times the pixel ratio — 1536 pixels, then stretched over
+   however wide the box happened to be. On a phone that is more than enough and
+   on a monitor it is a blur, which is what it looked like. Size the store from
+   the box that is actually on screen instead, capped so a hidpi desktop does not
+   ask for a canvas nobody can fill at 60fps. */
+const MAXBACK=2560;
+function setBacking(cssW, vw, vh){
+  /* the ratio is used as it comes and the bound is a pixel count. Clamping the
+     ratio to 2 instead would undersample a dpr-3 phone, which is the very fault
+     being fixed, only at the other end of the range. */
+  const dpr=window.devicePixelRatio||1;
+  let z = cssW>0 ? cssW*dpr/vw : Math.min(2,dpr);
+  z = Math.max(1, Math.min(z, MAXBACK/vw));
+  const w=Math.max(1,Math.round(vw*z)), h=Math.max(1,Math.round(vh*z));
+  if(cv.width!==w || cv.height!==h){ cv.width=w; cv.height=h; }
+  /* separately per axis: the two roundings above need not agree, and a click
+     turned back into a column assumes the canvas covers the box exactly */
+  ctx.setTransform(w/vw,0,0,h/vh,0,0);
+}
 function fit(){
-  const s=Math.min(2,window.devicePixelRatio||1);
   const v=edView(); EDVW=v.w; EDVH=v.h;
   const vw=EDVW, vh=EDVH;
-  cv.width=vw*s; cv.height=vh*s; ctx.setTransform(s,0,0,s,0,0);
+  const sp=edSpace(); edDensity(sp.w, sp.h);
   clampCam();
   /* In the embed the stage used to be width:100%/height:100% held in shape by
      two viewport-unit caps pulling against each other. That is only ever right
@@ -3652,7 +3717,7 @@ function fit(){
      it turns a click back into a column. */
   const q=s=>{ try{ return document.querySelector&&document.querySelector(s); }catch(e){ return null; } };
   const st=q('.stage'), sh=q('.sheet');
-  if(!st||!sh) return;
+  if(!st||!sh){ setBacking(0,vw,vh); return; }
   /* the box has to match whatever the canvas is now shaped like, or the sheet
      is stretched again — the same fault an ad break used to cause */
   st.style.aspectRatio = vw+' / '+vh;
@@ -3664,16 +3729,19 @@ function fit(){
   st.style.marginBottom = edit? 'auto' : '';
   if(!document.body.classList.contains('embed')){
     st.style.width=''; st.style.height='';
+    const r=(st.getBoundingClientRect && st.getBoundingClientRect()) || null;
+    setBacking(Math.round((r && r.width) || 0), vw, vh);
     edFillPanel(0);                       /* measure it, the flow decided its height */
     syncPanUI(); return;
   }
   const bw=sh.clientWidth, bh0=sh.clientHeight;
-  if(bw<=0||bh0<=0) return;                      /* hidden behind an ad: ask again later */
+  if(bw<=0||bh0<=0){ setBacking(0,vw,vh); return; }   /* hidden behind an ad: ask again later */
   let bh=bh0;
   if(edit) bh=Math.max(bh0*0.35, bh0-edPanelBudget(bh0));
   const sc=Math.min(bw/vw, bh/vh);
   st.style.width=Math.round(vw*sc)+'px';
   st.style.height=Math.round(vh*sc)+'px';
+  setBacking(Math.round(vw*sc), vw, vh);
   edFillPanel(Math.round(vh*sc));
   syncPanUI();          /* a resize can add or remove the need to pan down */
 }
@@ -4838,6 +4906,7 @@ function syncHud(){
   const canDash=!!(G.ab && G.ab.dash);
   $('cmdDash').classList.toggle('hidden', !canDash);
   $('padDash').classList.toggle('hidden', !canDash);
+  $('cmdDJ').classList.toggle('hidden', !(G.ab && G.ab.dj));
   if(G.lvl===-2){
     $('hudLv').textContent=G.dailyKey||'daily'; $('hudCon').textContent='DAILY';
     $('hudParts').textContent=G.parts+'/'+(G.partsTotal||0);
@@ -5079,7 +5148,8 @@ function buildPicker(){
         const tot=partsIn(i), skip=!!SAVE.skipped[i];
         b.innerHTML='<span class="n">'+String(i+1).padStart(3,'0')+'</span>'+
           '<span class="t">'+(lock?(REMIX?'Not cleared':'Locked'):L.name)+'</span>'+
-          (REMIX&&!lock&&!owned?'<span class="buytag">\u25b8 open to remix</span>':'')+
+          (REMIX&&!lock? (owned?'<span class="buytag own">\u2713 open</span>'
+                               :'<span class="buytag">\u25b8 open to remix</span>') : '')+
           '<span class="m">'+(best!==undefined?'<span class="done">'+fmt(best)+'s</span>'
               :(skip?'<span>skipped</span>':'<span>—</span>'))+
           '<span class="parts">'+parts+'/'+tot+'</span></span>';

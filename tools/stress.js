@@ -570,12 +570,20 @@ function phaseHud(){
   let bad=0;
   const pad=()=>run("document.getElementById('padDash').classList.contains('hidden')");
   const key=()=>run("document.getElementById('cmdDash').classList.contains('hidden')");
+  const dj =()=>run("document.getElementById('cmdDJ').classList.contains('hidden')");
   const N=run('LEVELS.length');
   for(let i=0;i<N;i++){
     const can=run(`(()=>{ loadLevel(${i}); return !!G.ab.dash; })()`);
     if(pad()===can){ if(++bad<5) bug('hud','sheet '+(i+1)+': dash is '+(can?'available':'not available')+
                                        ' but the touch button is '+(can?'hidden':'shown')); }
     if(key()===can){ if(++bad<5) bug('hud','sheet '+(i+1)+': the key list disagrees with the ability'); }
+    /* the same for double jump. Its card shows once ever and a returning player
+       has already spent it, so the key list is the only standing word that the
+       move exists — it has to be right on every sheet, not most. */
+    const cdj=run(`(()=>{ return !!G.ab.dj; })()`);
+    if(dj()===cdj){ if(++bad<5) bug('hud','sheet '+(i+1)+': double jump is '+(cdj?'available':'not available')+
+                                       ' but the key list says otherwise'); }
+    ok('hud','sheet '+(i+1)+' double jump');
     ok('hud','sheet '+(i+1));
   }
   /* and through the real entry points, not just loadLevel */
@@ -721,8 +729,11 @@ function phaseEdview(){
      stay true or the editor paints the wrong square in silence — the canvas box
      matches the viewport it draws, and edTile() undoes exactly what drawEditor
      does. Both are checked here across the shapes a phone actually is. */
-  const stage={style:{},classList:{contains:()=>false},getBoundingClientRect:()=>({height:0})};
-  const sheet={clientWidth:0,clientHeight:0};
+  const stage={style:{},classList:{contains:()=>false},
+    getBoundingClientRect(){ return {width:parseFloat(this.style.width)||0,
+                                     height:parseFloat(this.style.height)||0}; }};
+  const sheet={clientWidth:0,clientHeight:0,
+    getBoundingClientRect(){ return {width:this.clientWidth, height:this.clientHeight}; }};
   let PH=0;
   const panel={style:{},classList:{contains:()=>true},getBoundingClientRect:()=>({height:PH})};
   const prev=sandbox.document.querySelector;
@@ -737,10 +748,38 @@ function phaseEdview(){
        swatches sitting on top of a letterbox slit */
     const screens=[[412,915],[915,412],[820,1180],[1600,900],[1440,700],[390,844],[768,1024],
                    [633,357],[740,360],[844,390]];
+    const body=sandbox.document.body;
     for(const [w,h] of screens){
+     for(const embed of [false,true]){
+      /* the embed is what ships to Poki and used to be the untested half: the
+         standalone branch leaves stage.style.height empty, so every assertion
+         that reads it passed on a zero */
+      body.classList.toggle('embed', embed);
+      const tag=(embed?'embed ':'page ')+w+'x'+h;
       sheet.clientWidth=w; sheet.clientHeight=h; PH=cap(h);
       sandbox.window.innerHeight=h;
       run("G.state='edit'"); run('fit()');
+      /* the density classes are the whole point of measuring rather than asking
+         the window — inside the embed they must follow the box, not innerHeight */
+      if(embed){
+        sandbox.window.innerHeight=4000;               /* a tall page around a small frame */
+        run('fit()');
+        ok(run("document.body.classList.contains('tightv')")===(h<=430),
+           tag+' — tightv follows the box, not the window it sits in');
+        ok(run("document.body.classList.contains('shortv')")===(h<=560),
+           tag+' — shortv likewise');
+        sandbox.window.innerHeight=h; run('fit()');
+      }
+      ok(run("document.body.classList.contains('narrowv')")===(w<=560),
+         tag+' — narrowv follows the measured width');
+      /* the backing store has to cover the box it is stretched over, or a
+         monitor gets 1536 pixels blown up across 1900 and calls it a blur */
+      const backW=parseFloat(stage.style.width)||0;
+      if(embed && backW>0){
+        const cw=run('cv.width');
+        ok(cw>=Math.min(backW,2560)-2, tag+' — canvas carries '+cw+' pixels for a '+Math.round(backW)+'px box');
+        ok(cw<=2560, tag+' — and never asks for more than 2560');
+      }
       const vw=run('EDVW');
       ok(vw>0 && vw<=VW, w+'x'+h+' — viewport is '+(vw/TS).toFixed(1)+' columns, never more than play');
       ok(run('EDVH')>0 && run('EDVH')<=VH, w+'x'+h+' — and '+(run('EDVH')/TS).toFixed(1)+' rows, never more than the sheet');
@@ -767,8 +806,10 @@ function phaseEdview(){
          w+'x'+h+' — the right edge maps to the column drawn there');
       /* panning to the end must not run past the sheet */
       run("ED.pan=1"); for(let i=0;i<400;i++) run('step()'); run('ED.pan=0');
-      ok(run('G.cam') <= run('ED.cols*TS-EDVW')+0.5, w+'x'+h+' — panning stops at the last column');
+      ok(run('G.cam') <= run('ED.cols*TS-EDVW')+0.5, tag+' — panning stops at the last column');
+     }
     }
+    body.classList.remove('embed');
     /* the panel grows into whatever the sheet leaves over, and doing so must not
        move the sheet — measuring the panel to size the level would make the two
        chase each other forever */
