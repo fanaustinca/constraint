@@ -304,7 +304,15 @@ body.embed .cmd{display:none}
     justify-content:center; padding:6px 10px; pointer-events:none;
     background:linear-gradient(0deg, rgba(10,15,22,.82), rgba(10,15,22,0));
   }
-  body.embed.tightv .cmd{display:none}   /* no room to spend on prose */
+  /* A 640x360 box is short, not so short that the one thing telling you the
+     controls should go — hiding it was the wrong call. Set it smaller instead:
+     the strip is the only place a keyboard player is told what they have. */
+  body.embed.tightv .cmd{font-size:9px; gap:7px; padding:4px 8px}
+  body.embed.tightv kbd{font-size:9px; padding:1px 4px}
+  /* and it steps aside for the builder, whose own controls are the panel — with
+     the panel along the bottom it was covered anyway, but a side column leaves
+     the strip sitting across the sheet it is no longer describing */
+  body.embed.building .cmd{display:none}
 }
 body.embed .sheet{
   flex:1; border:0; padding:0; min-height:0;
@@ -3670,6 +3678,7 @@ function edSpace(){
 function edDensity(w,h){
   let cl=null; try{ cl=document.body.classList; }catch(e){}
   if(!cl || !cl.toggle) return;
+  cl.toggle('building', G.state==='edit');
   cl.toggle('tightv',  h<=430);
   cl.toggle('shortv',  h<=560);
   cl.toggle('narrowv', w<=560);

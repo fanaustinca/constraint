@@ -187,6 +187,27 @@ setTimeout(()=>{
   ok(calls.filter(c=>c==='gameplayStart').length===gs, 'no gameplayStart during a break');
   run("ADS.lock(false); G.state='menu'");
 
+  /* ---- the key strip ----
+     The only place a keyboard player is told what they have, including that they
+     can double jump — the intro card shows once ever. It may be hidden for the
+     builder, whose controls are the panel, and never for the box being small. */
+  console.log('\nkey strip');
+  {
+    /* the head carries a small reset block of its own, so take them all */
+    const css=[...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map(m=>m[1]).join('\n');
+    const bare=css.replace(/\/\*[\s\S]*?\*\//g,'');
+    const hides=[...bare.matchAll(/([^{}]*\.cmd[^{}]*)\{([^}]*)\}/g)]
+      .filter(m=>/display\s*:\s*none/.test(m[2]))
+      .map(m=>m[1].trim().replace(/\s+/g,' '));
+    ok(hides.length>0, 'the strip has hiding rules at all ('+hides.length+')');
+    const bySize=hides.filter(h=>/tightv|shortv|narrowv/.test(h));
+    ok(bySize.length===0, 'none of them hides it for the box being small'+
+       (bySize.length? ': '+bySize.join(' / '):''));
+    ok(/\.cmd\s*\{[^}]*display\s*:\s*flex/.test(bare), 'and it is shown in the embed on a keyboard');
+    ok(/id="cmdDJ"/.test(html), 'the double jump entry is in the strip');
+    console.log('       hidden by: '+hides.join(' / '));
+  }
+
   /* ---- remix is bought, never earned ----
      Clearing a sheet makes it eligible to be opened in the builder; it does not
      open it. The two were easy to confuse from the outside because the tag on

@@ -873,6 +873,22 @@ function phaseEdview(){
       PH=0;
     }
     body.classList.remove('embed');
+    /* 'building' is what lets the stylesheet keep the key strip out of the
+       builder's way. It has to follow the state and nothing else — keyed on the
+       box instead, the strip would vanish on a small screen in play, which is
+       exactly the bug that put it here. */
+    body.classList.add('embed');
+    sheet.clientWidth=640; sheet.clientHeight=360;
+    sandbox.window.innerWidth=640; sandbox.window.innerHeight=360;
+    run("G.state='edit'"); run('fit()');
+    ok(run("document.body.classList.contains('building')")===true,
+       '640x360 — the builder is announced to the stylesheet');
+    run("G.state='play'"); run('fit()');
+    ok(run("document.body.classList.contains('building')")===false,
+       '640x360 — and play is not, however small the box is');
+    ok(run("document.body.classList.contains('tightv')")===true,
+       '640x360 — while the box is still a tight one');
+    body.classList.remove('embed');
     run("G.state='play'"); run('fit()');
     ok(run('EDVW')===VW && run('EDVH')===VH, 'leaving the builder gives play its full window back');
   } finally {
