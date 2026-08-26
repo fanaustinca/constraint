@@ -332,6 +332,16 @@ body.embed .buildpanel{
   position:absolute; z-index:7; left:0; right:0; bottom:0;
   max-height:44%; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y;
 }
+/* A column down the right instead, on any box wide enough that taking the panel
+   out of the width costs the sheet less than taking it out of the height —
+   which on a 16:9 screen it always does, and is why the sheet used to sit in
+   the middle of 355px of dead margin each side. edLayout() decides; fit() sets
+   the width, since the sheet has to know what it is centring beside. */
+body.embed.sidep .buildpanel{
+  top:0; bottom:0; left:auto; right:0; max-height:100%;
+  border-left:1px solid var(--gridmaj); border-top:0;
+}
+body.sidep .buildpanel{max-height:none}
 /* A short screen has almost no height to give either way, so spend what there
    is on the sheet and make the panel denser.
 
@@ -343,24 +353,30 @@ body.embed .buildpanel{
 body.shortv .buildpanel{max-height:340px; padding:7px; gap:6px}
 body.embed.shortv .buildpanel{max-height:52%}
 body.shortv .buildui{gap:6px}
-/* Shorter still — 640x360 — and wrapping the palette at all is the wrong trade.
-   Three rows of swatches cost 130px out of 360 and left the sheet a slit with
-   the controls scrolled off under it. One row that slides sideways costs 46px
-   and hands the rest back to the drawing. */
-body.tightv .buildpanel{max-height:240px; padding:6px; gap:5px; touch-action:pan-x pan-y}
-body.embed.tightv .buildpanel{max-height:58%}
-/* pan-y alone on the panel would intersect with pan-x below and leave the row
+/* Shorter still — 640x360 — and wrapping the menu at all is the wrong trade.
+   One row, and everything is on it: the block palette, the theme, the pan
+   controls, save and test, all in a single strip that slides sideways for
+   whatever does not fit across. That strip costs TIGHTROW and the sheet keeps
+   the rest, which is what it takes to see all eighteen rows in 360px. */
+body.tightv:not(.sidep) .buildpanel{
+  padding:5px 6px; gap:0; max-height:none; overflow-y:hidden;
+  touch-action:pan-x pan-y;
+}
+body.embed.tightv:not(.sidep) .buildpanel{max-height:none}
+/* pan-y alone on the panel would intersect with pan-x below and leave the strip
    unable to scroll at all — a touch is allowed only what every ancestor allows. */
-body.tightv #palette{flex-wrap:nowrap; overflow-x:auto; touch-action:pan-x;
-  overscroll-behavior-x:contain; padding-bottom:3px}
-body.tightv #palette button{flex:0 0 auto}
-body.tightv .bdesc{min-height:0}
-/* and the rows under it stop stacking. A short box is nearly always a wide one,
-   so they sit two across; the palette and description keep the full span. */
-body.tightv .buildui{flex-flow:row wrap; align-items:flex-start; column-gap:14px; gap:5px}
-body.tightv .buildui > .brow{flex:1 1 240px; min-width:0}
-body.tightv .buildui > .brow:first-child, body.tightv .bdesc{flex:1 1 100%}
-body.tightv .bhint{display:none}
+body.tightv:not(.sidep) .buildui{
+  flex-flow:row nowrap; align-items:center; gap:12px; width:auto;
+  overflow-x:auto; overflow-y:hidden; touch-action:pan-x;
+  overscroll-behavior-x:contain; padding-bottom:2px;
+}
+body.tightv:not(.sidep) .buildui > *{flex:0 0 auto}
+body.tightv:not(.sidep) .brow{flex-wrap:nowrap}
+body.tightv:not(.sidep) #palette{flex-wrap:nowrap; overflow:visible}
+/* names on one line, so a swatch is one text row tall and not two */
+body.tightv:not(.sidep) #palette button{flex:0 0 auto; width:auto; min-width:42px; padding:4px 5px 3px}
+body.tightv:not(.sidep) #palette .pn{white-space:nowrap}
+body.tightv:not(.sidep) .bdesc, body.tightv:not(.sidep) .bhint{display:none}
 /* 54px swatches wrap to five rows in a narrow box and push the controls under
    the fold; at 44px the whole palette costs two rows fewer. Either dimension
    triggers it: a box on its side is wide enough to miss a width rule and short
@@ -3626,8 +3642,11 @@ let EDVW=VW, EDVH=VH;
    keeps the tiles legible and shows less of the sheet, panning to reach the
    rest, on both axes. Above it everything fits and nothing pans. */
 const MINTILE=20, BARPX=34;    /* the title strip above the sheet */
-/* what the panel is nominally allowed, matching the CSS cap. A function of the
-   window and nothing else, so it is the same answer every time it is asked. */
+/* On a box under 430px tall the menu is a single row that slides sideways, and
+   TIGHTROW is what that row costs. TIGHTTILE is the floor the sheet may shrink
+   to there — smaller than MINTILE on purpose, because seeing all eighteen rows
+   at 14px beats seeing eight of them at 20px when there is no third option. */
+const TIGHTROW=58, TIGHTTILE=12;
 /* The size of the box the game actually has, which is not the window's. On Poki
    the site hands the game a container and resizes it; a vh unit and a media
    query both describe the window around that container, so at 640x360 inside a
@@ -3660,32 +3679,58 @@ function edDensity(w,h){
   cl.toggle('narrowv', w<=560);
 }
 function edPanelBudget(wh){
-  /* Three tiers, and the shortest one is not a scaled-down version of the
-     others. A 360px landscape phone has to fit a title strip, a sheet worth
-     drawing on and a panel worth using into less height than a portrait phone
-     gives the panel alone; below 430 the palette collapses to a single sliding
-     row (see the media block) and the panel can live on a good deal less. */
-  if(wh<=430) return Math.min(0.40*wh,150);
+  /* Three tiers, and the shortest is not a scaled-down version of the others.
+     A 640x360 box has to fit a title strip, a sheet you can see all of, and a
+     menu worth using into less height than a tall phone spends on the menu
+     alone. There the menu is one row and costs a flat TIGHTROW. */
+  if(wh<=430) return TIGHTROW;
   return wh<=560 ? Math.min(0.50*wh,300) : Math.min(0.44*wh,400);
+}
+/* Where the panel goes, and what the sheet gets after it.
+
+   The panel comes out of one axis or the other and which one is not a matter of
+   taste. On a 1920x1080 screen a 400px strip along the bottom costs 37% of the
+   height and shrinks a 16:9 sheet to 1209px, leaving 355px of dead margin down
+   each side — the space that was reported. A 380px column costs 20% of the
+   width and leaves the sheet 1540px with no margin at all. So work out both and
+   keep whichever draws the sheet bigger. Under 900px wide, or too short to give
+   a column room to be a column, there is nothing to take and it goes along the
+   bottom. */
+function edLayout(bw,bh){
+  const avail=Math.max(60, bh-BARPX-12);        /* the strip sits over the top */
+  const tight=bh<=430;
+  const bot=tight? TIGHTROW : edPanelBudget(bh);
+  const botH=Math.max(avail*0.35, avail-bot);
+  const botS=Math.min(bw/VW, botH/VH);
+  let sideW=0, sideS=-1;
+  if(bw>=700){
+    sideW=Math.round(Math.min(380, Math.max(240, 0.24*bw)));
+    sideS=Math.min((bw-sideW)/VW, avail/VH);
+  }
+  return (sideS>botS) ? {side:sideW, w:bw-sideW, h:avail, panel:sideW}
+                      : {side:0,     w:bw,       h:botH,  panel:bot};
 }
 function edView(){
   if(G.state!=='edit') return {w:VW, h:VH};
   const q=t=>{ try{ return document.querySelector&&document.querySelector(t); }catch(e){ return null; } };
   const sh=q('.sheet'); if(!sh) return {w:VW, h:VH};
-  const bw=sh.clientWidth; if(!(bw>0)) return {w:VW, h:VH};
-  /* The height the sheet may occupy. Measured from the box the game was handed
-     rather than the window around it, and never from the panel: the panel is
-     about to be grown to fill whatever the sheet leaves over, and a size derived
-     from measuring it would feed back into itself — the level would shrink
-     because the panel grew because the level shrank. Nothing here reads the
-     panel, and in the embed it is out of flow, so the box does not move when it
-     does. */
-  const wh=edSpace().h;
-  const bh=Math.max(wh*0.28, wh-edPanelBudget(wh)-46);
-  const fit=Math.min(bw/VW, bh/VH);            /* scale that shows the whole sheet */
-  const z=Math.max(fit, MINTILE/TS);           /* never below a tile you can hit */
-  return { w: Math.max(10*TS, Math.min(VW, Math.round(bw/z))),
-           h: Math.max(6*TS,  Math.min(VH, Math.round(bh/z))) };
+  /* Measured from the box the game was handed rather than the window around it,
+     and never from the panel: the panel is about to be grown to fill whatever
+     the sheet leaves over, and a size derived from measuring it would feed back
+     into itself — the level would shrink because the panel grew because the
+     level shrank. Nothing here reads the panel, and in the embed it is out of
+     flow, so the box does not move when it does. */
+  const sp=edSpace(); if(!(sp.w>0)) return {w:VW, h:VH};
+  const lay=edLayout(sp.w, sp.h);
+  const fitS=Math.min(lay.w/VW, lay.h/VH);     /* scale that shows the whole sheet */
+  /* The floor stops the tile shrinking past something you can aim at, and crops
+     and pans instead. On a one-row box that trade runs the wrong way: 14px tiles
+     show all eighteen rows where 20px tiles show eight of them, and the whole
+     level is the thing being asked for. */
+  const floor=(sp.h<=430? TIGHTTILE : MINTILE)/TS;
+  const z=Math.max(fitS, floor);
+  return { w: Math.max(10*TS, Math.min(VW, Math.round(lay.w/z))),
+           h: Math.max(6*TS,  Math.min(VH, Math.round(lay.h/z))) };
 }
 /* The canvas is 768 world units across whatever it is drawn at, and the backing
    store used to be that times the pixel ratio — 1536 pixels, then stretched over
@@ -3707,6 +3752,16 @@ function setBacking(cssW, vw, vh){
      turned back into a column assumes the canvas covers the box exactly */
   ctx.setTransform(w/vw,0,0,h/vh,0,0);
 }
+/* the panel as a column down the right, which is a class for the stylesheet and
+   an explicit width because the sheet has to know what it is centring beside */
+function edSidePanel(w){
+  let cl=null; try{ cl=document.body.classList; }catch(e){}
+  if(cl && cl.toggle) cl.toggle('sidep', w>0);
+  let pan=null; try{ pan=document.querySelector('.buildpanel'); }catch(e){}
+  if(!pan) return;
+  const px=w>0? w+'px' : '';
+  if(pan.style.width!==px) pan.style.width=px;
+}
 function fit(){
   const v=edView(); EDVW=v.w; EDVH=v.h;
   const vw=EDVW, vh=EDVH;
@@ -3717,37 +3772,42 @@ function fit(){
      while the sheet box IS the viewport, and an ad break does not promise that:
      the game comes back inside a container of some other size, the caps no
      longer describe it, and the sheet is drawn stretched. Measure the space
-     that actually exists and put an exact 32:18 box in the middle of it. The
-     canvas fills that box exactly, which is also what edPaint() assumes when
-     it turns a click back into a column. */
+     that actually exists and put an exact box in the middle of it. The canvas
+     fills that box exactly, which is what edTile() assumes when it turns a
+     click back into a column. */
   const q=s=>{ try{ return document.querySelector&&document.querySelector(s); }catch(e){ return null; } };
   const st=q('.stage'), sh=q('.sheet');
   if(!st||!sh){ setBacking(0,vw,vh); return; }
   /* the box has to match whatever the canvas is now shaped like, or the sheet
      is stretched again — the same fault an ad break used to cause */
   st.style.aspectRatio = vw+' / '+vh;
-  /* in the builder the panel is pinned over the bottom of the sheet, so a stage
-     centred in the full height puts its lower half behind the panel. Sit it
-     against the top instead, and only for as long as the panel is up. */
   const edit=(G.state==='edit');
-  st.style.marginTop = edit? '0' : '';
-  st.style.marginBottom = edit? 'auto' : '';
   if(!document.body.classList.contains('embed')){
-    st.style.width=''; st.style.height='';
+    st.style.width=''; st.style.height=''; st.style.marginRight='';
+    st.style.marginTop=''; st.style.marginBottom='';
     const r=(st.getBoundingClientRect && st.getBoundingClientRect()) || null;
     setBacking(Math.round((r && r.width) || 0), vw, vh);
+    edSidePanel(0);
     edFillPanel(0);                       /* measure it, the flow decided its height */
     syncPanUI(); return;
   }
   const bw=sh.clientWidth, bh0=sh.clientHeight;
   if(bw<=0||bh0<=0){ setBacking(0,vw,vh); return; }   /* hidden behind an ad: ask again later */
-  let bh=bh0;
-  if(edit) bh=Math.max(bh0*0.35, bh0-edPanelBudget(bh0));
-  const sc=Math.min(bw/vw, bh/vh);
-  st.style.width=Math.round(vw*sc)+'px';
-  st.style.height=Math.round(vh*sc)+'px';
-  setBacking(Math.round(vw*sc), vw, vh);
-  edFillPanel(Math.round(vh*sc));
+  const lay=edit? edLayout(bw,bh0) : {side:0, w:bw, h:bh0, panel:0};
+  const sc=Math.min(lay.w/vw, lay.h/vh);
+  const sw=Math.round(vw*sc), sh2=Math.round(vh*sc);
+  st.style.width=sw+'px';
+  st.style.height=sh2+'px';
+  /* A panel along the bottom means the stage sits under the title strip and the
+     panel takes the rest; a panel down the side means it centres vertically and
+     is shoved left by the column's width, so it centres in what is left of the
+     row rather than behind it. */
+  st.style.marginRight  = lay.side? lay.side+'px' : '';
+  st.style.marginTop    = (edit && !lay.side)? BARPX+'px' : '';
+  st.style.marginBottom = (edit && !lay.side)? 'auto' : '';
+  setBacking(sw, vw, vh);
+  edSidePanel(lay.side);
+  edFillPanel(lay.side? -1 : sh2);
   syncPanUI();          /* a resize can add or remove the need to pan down */
 }
 /* The level is already as large as MINTILE lets it be, and on a tall phone that
@@ -3755,17 +3815,19 @@ function fit(){
    palette. Hand that band to the panel: it grows upward to meet the sheet, and
    because edView() never measures the panel, the level does not move. */
 function edFillPanel(stageH){
+  /* -1 means the panel is a column down the side and owns its full height
+     already; there is no band under the sheet for it to grow into. */
   let pan=null;
   try{ pan=document.querySelector('.buildpanel'); }catch(e){}
   if(!pan) return;
   const on=(G.state==='edit') && (()=>{ try{ return pan.classList.contains('on'); }catch(e){ return false; } })();
-  if(!on){ if(pan.style.minHeight) pan.style.minHeight=''; return; }
+  if(!on || stageH<0){ if(pan.style.minHeight) pan.style.minHeight=''; return; }
   if(!(stageH>0)){
     /* not laid out in pixels (the non-embed flow case): ask the element */
     try{ const st=document.querySelector('.stage');
          stageH=st && st.getBoundingClientRect ? st.getBoundingClientRect().height : 0; }catch(e){ stageH=0; }
   }
-  const wh=window.innerHeight||VH;
+  const wh=edSpace().h;
   const left=Math.round(Math.max(0, wh-stageH-BARPX));
   const px=left? left+'px' : '';
   if(pan.style.minHeight!==px) pan.style.minHeight=px;   /* only write on change: a

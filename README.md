@@ -118,8 +118,10 @@ unstable platforms included, which are objects with a path rather than tiles and
 slide past the sweep entirely; no tile falling through to a generic block in a code world;
 and the side worlds — every one of the twenty listed, each type walking its own eighty
 sheets to the end and stopping there, without ever moving the main road; and the
-builder's viewport being recut for the screen — ten shapes from a 360px landscape phone to
-a desktop — without a click ever landing on a tile other than the one it points at.
+builder's viewport being recut for the screen — ten shapes from a 360px landscape box to
+a desktop, each as the standalone page and as the embed — without a click ever landing on a
+tile other than the one it points at, with the whole sheet on screen wherever it fits and
+the menu always taking whichever axis costs the sheet least.
 
 ```bash
 node tools/stress.js --seed 7     # a different run

@@ -81,6 +81,7 @@ function bug(phase, what, detail){
   console.log('  BUG  ['+phase+'] '+what+(detail?'\n         '+detail:''));
 }
 function ok(phase,what){ checks++; }
+const pass=ok;
 function head(t){ console.log('\n'+t); }
 
 /* ---------- shared invariant check ---------- */
@@ -722,6 +723,13 @@ function phaseMarathon(){
    cleared instead, and leave that number alone. */
 /* ================= phase: edview ================= */
 function phaseEdview(){
+  /* ok() at file scope takes the phase a passing check belongs to and counts it;
+     it tests nothing, and bug() is what reports a failure. Every assertion below
+     was written as ok(condition, message) instead, which counts a pass whatever
+     the condition was — so this phase asserted nothing at all for as long as it
+     existed, and reported thousands of clean checks while doing it. Shadow it
+     here with something that actually decides. */
+  const ok=(c,m)=>{ if(c) pass('edview',m); else bug('edview',m); };
   head('edview — the builder viewport is recut for the screen, and a click still '+
        'lands on the tile it points at');
   /* Play is always 32 columns. The builder is not: on a tall narrow screen it
@@ -810,23 +818,61 @@ function phaseEdview(){
      }
     }
     body.classList.remove('embed');
-    /* the panel grows into whatever the sheet leaves over, and doing so must not
-       move the sheet — measuring the panel to size the level would make the two
-       chase each other forever */
-    for(const [w,h] of [[412,915],[412,1080],[390,844],[1600,900],[633,357],[740,360]]){
-      sheet.clientWidth=w; sheet.clientHeight=h; sandbox.window.innerHeight=h;
+    /* The panel takes one axis or the other and must leave no dead band on the
+       one it took, and growing into that band must not move the sheet — sizing
+       the level from the panel's measured height would make the two chase each
+       other forever. This runs in the embed, which is the build that ships: with
+       'embed' off the stage is laid out by the flow and every assertion here
+       reads a zero and passes without testing anything. */
+    body.classList.add('embed');
+    for(const [w,h] of [[412,915],[412,1080],[390,844],[1600,900],[633,357],[740,360],
+                        [1920,1080],[1024,768],[915,412]]){
+      sheet.clientWidth=w; sheet.clientHeight=h;
+      sandbox.window.innerHeight=h; sandbox.window.innerWidth=w;
       run("G.state='edit'"); run('fit()');
-      const before=run('EDVW')+'x'+run('EDVH')+':'+stage.style.height;
+      const before=run('EDVW')+'x'+run('EDVH')+':'+stage.style.width+':'+stage.style.height;
+      const side=run("document.body.classList.contains('sidep')");
       const fill=parseFloat(panel.style.minHeight)||0;
-      const sH=parseFloat(stage.style.height)||0;
-      ok(fill>0, w+'x'+h+' — the panel is given the space under the sheet');
-      ok(Math.abs(h-run('BARPX')-sH-fill)<2, w+'x'+h+' — nothing is left blank between them');
+      const sW=parseFloat(stage.style.width)||0, sH=parseFloat(stage.style.height)||0;
+      const tag=(side?'column ':'strip ')+w+'x'+h;
+      ok(sW>0 && sH>0, tag+' — the stage is given a box');
+      /* The sheet is 16:9 and so is most of what it is drawn in, so one axis or
+         the other always has something left over — demanding a zero margin would
+         be demanding the aspect ratio away. What must hold is that the panel came
+         out of the axis that costs the sheet least, which is the whole reason it
+         moves to a column: on 1920x1080 a bottom strip draws the sheet at 1.47
+         and a right-hand column at 2.01, and the 355px of dead margin down each
+         side was the difference. */
+      {
+        const avail=Math.max(60, h-run('BARPX')-12);
+        const bot=(h<=430)? run('TIGHTROW') : run('edPanelBudget('+h+')');
+        const botS=Math.min(w/VW, Math.max(avail*0.35, avail-bot)/VH);
+        let sideS=-1;
+        if(w>=700){ const cw2=Math.round(Math.min(380,Math.max(240,0.24*w)));
+                    sideS=Math.min((w-cw2)/VW, avail/VH); }
+        const best=Math.max(botS,sideS);
+        ok(Math.abs(sW-Math.round(VW*best))<=1,
+           tag+' — drawn at '+(sW/VW).toFixed(2)+'x, the best either placement allows ('+best.toFixed(2)+'x)');
+        ok(side===(sideS>botS), tag+' — and put on the cheaper axis');
+      }
+      if(side){
+        const cw=parseFloat(panel.style.width)||0;
+        ok(cw>0, tag+' — the column is given a width');
+        ok(fill===0, tag+' — and the column is not also stretched downward');
+      }else{
+        ok(fill>0, tag+' — the panel is given the space under the sheet');
+        ok(Math.abs(h-run('BARPX')-sH-fill)<2, tag+' — nothing is left blank between them');
+      }
+      /* the whole sheet, or as much of it as the floor allows */
+      const rows=run('EDVH')/run('TS'), cols=run('EDVW')/run('TS');
+      if(h<=430) ok(rows===run('ROWS'), tag+' — all '+run('ROWS')+' rows are on screen at once');
       PH=fill;                                  /* as if the panel had really grown */
       run('fit()'); run('fit()'); run('fit()');
-      ok(run('EDVW')+'x'+run('EDVH')+':'+stage.style.height===before,
-         w+'x'+h+' — the sheet does not move when the panel grows');
+      ok(run('EDVW')+'x'+run('EDVH')+':'+stage.style.width+':'+stage.style.height===before,
+         tag+' — the sheet does not move when the panel grows');
       PH=0;
     }
+    body.classList.remove('embed');
     run("G.state='play'"); run('fit()');
     ok(run('EDVW')===VW && run('EDVH')===VH, 'leaving the builder gives play its full window back');
   } finally {
