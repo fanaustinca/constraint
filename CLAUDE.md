@@ -12,13 +12,18 @@ before changing anything — several of them look like working code.
 
 ## 1. Layout, and which file is the source
 
+The repo lives at **`/home/austin/constraint`** (WSL2). GitHub remote:
+`fanaustinca/constraint`, branch `main`.
+
 ```
-game.html            THE SOURCE. ~5800 lines: <style>, markup, one <script>.
-index.html           GENERATED. What GitHub Pages serves.
-poki/index.html      GENERATED. What gets uploaded to Poki.
-build/game.js        GENERATED, gitignored. The <script> body, for node.
-tools/               build + test scripts
-README.md            player- and design-facing notes
+/home/austin/constraint/
+  game.html            THE SOURCE. ~5800 lines: <style>, markup, one <script>.
+  index.html           GENERATED. What GitHub Pages serves.
+  poki/index.html      GENERATED. What gets uploaded to Poki.
+  build/game.js        GENERATED, gitignored. The <script> body, for node.
+  CLAUDE.md            this file
+  README.md            player- and design-facing notes
+  tools/               build + test scripts
 ```
 
 **Edit `game.html` only.** `index.html` and `poki/index.html` are written by
@@ -395,13 +400,60 @@ be a stale local copy.
 
 ---
 
-## 10. State of play
+## 10. Where each build goes
 
-Deployed:
-- GitHub Pages — https://fanaustinca.github.io/constraint/ — **the same bytes as
-  the submission**, so test there.
-- Poki upload — `poki/index.html`.
-- Claude artifact — the standalone `game.html` build.
+Three destinations, two of them the same bytes. Nothing here is uploaded
+automatically — Pages follows a `git push`, the other two are manual.
+
+| destination | file | how it gets there |
+|---|---|---|
+| **Poki submission** | `/home/austin/constraint/poki/index.html` | **upload this file by hand** in the Poki developer dashboard |
+| **GitHub Pages** | `/home/austin/constraint/index.html` | `git push` — Pages serves repo root on `main` |
+| **Claude artifact** | `/home/austin/constraint/game.html` | published via the Artifact tool |
+
+**The Poki upload is a single self-contained HTML file.** No folder, no assets,
+no `build/`, no `tools/` — everything is inline except the SDK, which is pulled
+from `https://game-cdn.poki.com/scripts/v2/poki-sdk.js`. That CDN script tag is
+the only external request the game makes.
+
+`poki/` holds nothing else, so uploading that directory and uploading the one
+file are the same thing. Never upload the repo root — it carries `game.html`,
+`tools/`, and `README.md`, none of which belong in a submission.
+
+**Test on Pages, not on `file://`.** https://fanaustinca.github.io/constraint/
+is byte-identical to `poki/index.html`, so it is the submission. Opening
+`poki/index.html` from `file://` renders the game but the SDK will not load, so
+nothing ad-related is real there. Point the Poki Inspector at the Pages URL.
+
+That identity is recent and was bought the hard way. Until `8f499fa` the
+repo-root `index.html` was the *standalone* build — no SDK, `POKI_BUILD` false,
+its own document shell — so the public URL exercised the one half of the code
+that could not reproduce an SDK complaint at all. `tools/pokihtml.js` now
+writes both files from one generator, and `cmp` is what proves it. If `cmp`
+ever reports a difference, stop and fix the generator; do not hand-edit either
+output.
+
+From Windows the tree is at `\\wsl$\<distro>\home\austin\constraint` —
+useful for dragging `poki\index.html` into the Poki dashboard's file picker.
+
+After any change: rebuild, confirm the two are identical, push, and wait for
+Pages to actually serve the new bytes before retesting.
+
+```bash
+cd /home/austin/constraint
+node tools/build.js && node tools/build-poki.js   # both read game.html directly
+cmp index.html poki/index.html                   # must be silent
+node tools/extract.js                            # only the node tests need this
+git add -A && git commit -m "…" && git push
+# then confirm Pages has caught up (it lags a minute or two):
+until curl -s https://fanaustinca.github.io/constraint/ -o /tmp/live.html \
+      && cmp -s /tmp/live.html index.html; do sleep 15; done; echo served
+```
+
+A cached copy is indistinguishable from an unfixed one — **hard-refresh**
+(Ctrl+Shift+R) when retesting, and say so to whoever else is testing.
+
+## 11. State of play
 
 Green at last check: `stress` 5243/0, `pokicheck` all clear on both builds,
 `buildercheck` all clear, `bounds` 0 out-of-bounds frames across 153 sheets.
