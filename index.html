@@ -37,6 +37,14 @@ body{
   padding:8px 12px; font-size:11px; letter-spacing:.12em; text-transform:uppercase;
   color:var(--text-dim); flex-wrap:wrap;
 }
+/* Poki asks that a game storing a player's progress says so. It is one line,
+   next to the button that erases it and again on the Controls page, so whoever
+   goes looking for either finds it. */
+.savenote{
+  font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--text-faint); font-family:var(--mono); align-self:center;
+}
+.howto .savenote{text-transform:none; letter-spacing:.02em; font-size:11px; align-self:auto}
 .mark{color:var(--accent); font-weight:700; letter-spacing:.28em}
 .bar .sep{width:1px; height:14px; background:var(--gridmaj)}
 .field{display:flex; gap:6px; align-items:baseline}
@@ -202,17 +210,20 @@ button.free:hover{background:var(--datum); color:var(--ink)}
 /* ---- touch pads ---- */
 .touch{position:absolute; inset:0; display:none; z-index:4; pointer-events:none}
 .touch.on{display:block}
+/* The circle used to take its height from a percentage padding-bottom, which
+   ties the height to the width and cannot be given a floor: a min-width leaves
+   the padding computed from the container and the bubble turns into an ellipse.
+   aspect-ratio does the same job and survives a minimum, which the pause pad
+   needs — at 10% of a 360px phone it came out 36px across, under any thumb
+   target worth the name. */
 .touch button{
-  position:absolute; width:16%; padding:0 0 16%; bottom:4%;
+  position:absolute; width:16%; aspect-ratio:1; padding:0; bottom:4%;
   border:1.5px solid rgba(94,143,181,.55);
   background:rgba(20,31,43,.42);
   border-radius:50%; pointer-events:auto; touch-action:none;
   color:var(--text);
   -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;
 }
-/* the circle gets its height from padding, so the content box is zero tall and
-   flex centring has nothing to centre against: the glyph is placed against the
-   padding box instead, which is the whole bubble */
 .touch button svg{
   position:absolute; inset:0; margin:auto; width:46%; height:46%;
   fill:none; stroke:currentColor; stroke-width:2.4;
@@ -220,12 +231,26 @@ button.free:hover{background:var(--datum); color:var(--ink)}
 }
 .touch button.act{border-color:var(--accent); color:var(--accent); background:rgba(255,122,47,.22)}
 /* pause lives away from the thumbs, at the top, so it is never hit by accident */
-.touch .pz{top:3.5%; bottom:auto; right:3.5%; width:10%; padding-bottom:10%}
+.touch .pz{top:3.5%; bottom:auto; right:3.5%; width:10%; min-width:44px; max-width:72px}
 .touch .pz svg{width:52%; height:52%}
-.touch .l{left:3.5%}
-.touch .r{left:22%}
-.touch .a{right:3.5%; bottom:5%; width:20%; padding-bottom:20%}
-.touch .bb{right:26%; bottom:5%; width:17%; padding-bottom:17%}
+.touch .l{left:3.5%; min-width:52px}
+.touch .r{left:22%; min-width:52px}
+.touch .a{right:3.5%; bottom:5%; width:20%; min-width:64px}
+.touch .bb{right:26%; bottom:5%; width:17%; min-width:56px}
+/* A portrait phone hands the sheet a 32:18 slot and has most of the screen over.
+   Centred, the sheet sat in the middle of that with the thumb pads drawn on top
+   of it: a 390-wide phone gave the sheet 26% of its screen and then covered a
+   third of that again with the controls. When the leftover band is big enough to
+   hold them, the pads move off the sheet and into it — the touch layer reaches
+   past the bottom of the stage by --deck, which fit() measures, so the pads sit
+   at the bottom of the screen where thumbs are and the sheet is left alone.
+   The layer is still a child of .stage: everything inside it stays in the
+   stage's own coordinates, which is what the percentage positions above want,
+   and none of it depends on the app being the whole window. */
+body.deck .touch{bottom:calc(0px - var(--deck,0px))}
+/* and with the pads no longer under the overlay's own box, they have to be told
+   to go away when a menu is up — otherwise they float over it */
+body.ovon .touch{display:none}
 .buildpanel{
   display:none; flex-direction:column; gap:8px;
   background:var(--panel); border:1px solid var(--gridmaj); padding:10px;
@@ -308,7 +333,13 @@ body.embed .bar{
    either, with nothing at all. Float it over the bottom the way the bar floats
    over the top, under the build panel so the builder still covers it. */
 body.embed .cmd{display:none}
-@media (pointer:fine){
+/* pointer:fine is a mouse or a stylus, and pointer:none is a box that will not
+   say — an embedded webview, a TV, a headless browser. Neither of those gets an
+   on-screen pad, so neither may be left without the legend either: the pad is
+   put up for pointer:coarse, and this is the complement of that, not a subset
+   of it. Written as two queries rather than `not (pointer:coarse)` so it does
+   not depend on Level 4 boolean-context support. */
+@media (pointer:fine), (pointer:none){
   body.embed .cmd{
     display:flex; position:absolute; z-index:5; left:0; right:0; bottom:0;
     justify-content:center; padding:6px 10px; pointer-events:none;
@@ -392,13 +423,20 @@ body.tightv:not(.sidep) .bdesc, body.tightv:not(.sidep) .bhint{display:none}
 body.narrowv #palette button, body.shortv #palette button{width:44px; font-size:7px; padding:4px 1px 3px}
 body.narrowv #palette canvas, body.shortv #palette canvas{width:21px; height:21px}
 body.narrowv .buildpanel{padding:8px}
-@media (max-width:560px){
-  .buildpanel{padding:8px}
-  body.embed .bar .field:nth-child(n+6){display:none}
-  .ov h1{letter-spacing:.18em; text-indent:.18em}
-  .ov p{font-size:11px}
-  button{padding:8px 14px}
-}
+/* What comes out of a narrow bar used to be decided by counting children —
+   .field:nth-child(n+6) — which is every field past the spacer: the clock, the
+   deaths and the parts, the three things a player is actually watching. On a
+   phone the bar read "CONSTRAINT | SHEET 01 · FIRST SKETCH / CONSTRAINT FIXED"
+   and nothing about the run at all. Drop the wordmark and the constraint name
+   instead and keep the run.
+   Read off the measured class rather than a width media query: on Poki the box
+   is not the window, so a max-width query misses a 640-wide game in a 1440-wide
+   page entirely. Same reason the rest of this block moved across. */
+body.narrowv .bar{gap:9px}
+body.narrowv .bar .mark, body.narrowv .bar .sep, body.narrowv .bar #conField{display:none}
+body.narrowv .ov h1{letter-spacing:.18em; text-indent:.18em}
+body.narrowv .ov p{font-size:11px}
+body.narrowv button{padding:8px 14px}
 @media (prefers-reduced-motion:reduce){*{animation:none !important}}
 </style>
 
@@ -407,7 +445,7 @@ body.narrowv .buildpanel{padding:8px}
     <span class="mark">CONSTRAINT</span>
     <span class="sep"></span>
     <span class="field"><span class="k">Sheet</span><span class="v" id="hudLv">—</span></span>
-    <span class="field"><span class="k">Constraint</span><span class="v hi" id="hudCon">—</span></span>
+    <span class="field" id="conField"><span class="k">Constraint</span><span class="v hi" id="hudCon">—</span></span>
     <span class="spacer"></span>
     <span class="field"><span class="k">T</span><span class="v" id="hudTime">0.00</span></span>
     <span class="field"><span class="k">Deaths</span><span class="v" id="hudDeaths">0</span></span>
@@ -446,6 +484,7 @@ body.narrowv .buildpanel{padding:8px}
         <div class="row">
           <button id="btnBack">Back</button>
           <button class="tiny" id="btnWipe">Erase progress</button>
+          <span class="savenote">Saved in this browser</span>
           <span class="cutgroup hidden" id="cutGroup">
             <label>Interludes</label>
             <button class="tiny" id="btnCut1">1</button>
@@ -497,6 +536,13 @@ body.narrowv .buildpanel{padding:8px}
             <dt>Cyan updrafts</dt><dd>Rising air. Walk in and it carries you up; steer out of the top onto whatever the climb was for.</dd>
             <dt>Blue / ghosted</dt><dd>Phase blocks. They trade places on a timer — watch them flicker before they switch.</dd>
           </dl>
+          <div class="h">Saved data</div>
+          <p class="savenote">CONSTRAINT keeps your progress — sheets cleared, best
+            times, parts, ghosts and anything you drew in the builder — in this
+            browser's own local storage on this device. Nothing is sent anywhere
+            and there is no account. Clearing your browser's site data, or
+            "Erase progress" in the sheet list, removes all of it. A private or
+            incognito window keeps nothing once you close it.</p>
           <div class="row"><button id="btnHowBack">Back</button></div>
         </div>
       </div>
@@ -3679,6 +3725,42 @@ function edSpace(){
 }
 /* What the box is too small for, said once on <body> so the stylesheet can read
    it. Toggling only on change keeps this off the layout path when nothing moved. */
+/* Is this a box that will be drawing thumb pads? Asked as a function rather
+   than read from a const because fit() runs at load, above the touch setup, and
+   a const declared down there would still be in its temporal dead zone — the
+   same trap that has shipped a black page here twice. */
+function touchUI(){
+  if(touchUI._v===undefined){
+    let v=false;
+    try{ v=(matchMedia && matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window); }catch(e){}
+    touchUI._v=v;
+  }
+  return touchUI._v;
+}
+/* Where the sheet sits in a tall touch box, and how far the touch layer has to
+   reach below it to meet the bottom of the screen — or null for no deck.
+
+   A portrait phone hands a 32:18 sheet a quarter of its screen and has the rest
+   over. Centred, that leftover is split into two useless half-bands and the
+   thumb pads are drawn on top of the sheet itself. So lift the sheet off centre
+   and hand the whole band underneath to the pads: eyes up, thumbs down, and
+   nothing covering the one part of the screen being read.
+
+   The lift is written as margin-top with margin-bottom:auto, which is exact —
+   body.embed .stage is margin:auto, so setting only one side leaves the other
+   to absorb the slack and the top lands where it is put. Setting margin-bottom
+   instead does the opposite of what it looks like: the auto top eats everything
+   and the sheet goes to the bottom of the box.
+
+   Pure: box in, numbers out, so it can never chase a size it has just written. */
+const DECKFREE=220, DECKBAND=300;
+function edDeck(boxH, stageH){
+  if(!touchUI()) return null;
+  const free=boxH-stageH;
+  if(!(free>=DECKFREE)) return null;   /* landscape: there is no band to move into */
+  const top=Math.max(BARPX+8, Math.round((boxH-DECKBAND-stageH)/2));
+  return {top:top, deck:Math.max(0, boxH-top-stageH)};
+}
 function edDensity(w,h){
   let cl=null; try{ cl=document.body.classList; }catch(e){}
   if(!cl || !cl.toggle) return;
@@ -3771,6 +3853,17 @@ function edSidePanel(w){
   const px=w>0? w+'px' : '';
   if(pan.style.width!==px) pan.style.width=px;
 }
+/* Written only on change: a ResizeObserver is watching the sheet, and rewriting
+   the same value churns it forever. */
+function setDeck(px){
+  try{
+    const on=px>0;
+    document.body.classList.toggle('deck', on);
+    const v=on? px+'px' : '0px';
+    const st=document.documentElement.style;
+    if(st.getPropertyValue('--deck')!==v) st.setProperty('--deck', v);
+  }catch(e){}
+}
 function fit(){
   const v=edView(); EDVW=v.w; EDVH=v.h;
   const vw=EDVW, vh=EDVH;
@@ -3811,9 +3904,13 @@ function fit(){
      panel takes the rest; a panel down the side means it centres vertically and
      is shoved left by the column's width, so it centres in what is left of the
      row rather than behind it. */
+  /* Play on a tall touch screen hands the empty band under the sheet to the
+     thumb pads; the builder has its own panel down there and wants none of it. */
+  const dk = edit? null : edDeck(bh0, sh2);
   st.style.marginRight  = lay.side? lay.side+'px' : '';
-  st.style.marginTop    = (edit && !lay.side)? BARPX+'px' : '';
-  st.style.marginBottom = (edit && !lay.side)? 'auto' : '';
+  st.style.marginTop    = (edit && !lay.side)? BARPX+'px' : (dk? dk.top+'px' : '');
+  st.style.marginBottom = (edit && !lay.side)? 'auto' : (dk? 'auto' : '');
+  setDeck(dk? dk.deck : 0);
   setBacking(sw, vw, vh);
   edSidePanel(lay.side);
   edFillPanel(lay.side? -1 : sh2);
@@ -4974,7 +5071,12 @@ function setRankTag(){
 /* -------------------------------- UI -------------------------------- */
 const $=id=>document.getElementById(id);
 const OVS=['ovBoot','ovMenu','ovLevels','ovHow','ovPause','ovDone','ovRank','ovAd','ovIntro'];
-function showOv(id){ OVS.forEach(o=>$(o).classList.toggle('on',o===id)); }
+function showOv(id){
+  OVS.forEach(o=>$(o).classList.toggle('on',o===id));
+  /* the thumb pads are not part of any menu, and on a deck layout they are not
+     under the overlay's box either — say on <body> that one is up */
+  try{ document.body.classList.toggle('ovon', !!id); }catch(e){}
+}
 function fmt(t){ return t.toFixed(2); }
 function syncHud(){
   /* neither the key list nor the touch pad advertises a move you do not have
@@ -5727,8 +5829,11 @@ cv.addEventListener('pointerdown',()=>{
   else { G.state='menu'; buildPicker(); showOv('ovMenu'); }
 });
 cv.addEventListener('contextmenu',e=>e.preventDefault());
-if(matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window)){
+if(touchUI()){
   $('touch').classList.add('on');
+  /* touchUI() answered the same way when fit() ran at load, so the deck is
+     already cut; this is here so it stays right if either end ever moves. */
+  try{ fit(); }catch(e){}
   $('touch').querySelectorAll('.pz').forEach(b=>{
     const go=e=>{ e.preventDefault(); if(ADS.inAd) return;
       if(G.state==='play'||G.state==='pause') togglePause(); };

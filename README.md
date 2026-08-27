@@ -104,6 +104,15 @@ node tools/buildercheck.js                # share codes, remixing, themes
 node tools/stress.js                      # everything else, see below
 ```
 
+`tools/browsercheck.js` runs the game in headless Chrome — the Poki submission checklist
+in twelve phases, 333 assertions, with the SDK intercepted by a mock that records every
+lifecycle call in order. It checks what a node sandbox cannot: that the simulation really
+freezes and the audio really goes off while an ad is up, that a real key press cannot cut
+one short, that a real tab switch closes the gameplay session, that the page never scrolls
+on space or the cursor keys, and that every layout from 640x360 to a portrait phone puts
+the whole sheet on screen with the controls somewhere a thumb can reach. `--shots DIR`
+writes a screenshot of each one.
+
 `tools/stress.js` drives the whole game from a seeded PRNG — including the game's
 own `Math.random` — so anything it finds replays exactly with `--seed N`. Twenty
 phases: every sheet loads with a spawn, an exit and a sane grid; random input
@@ -190,9 +199,15 @@ are kept. Trials never record one — the ranking test is meant to be met cold.
 Arrows or WASD to move · Space/W/Up to jump (hold for height) · Shift/X to dash ·
 Down to drop through thin platforms · R restart · Esc pause · M mute
 
-On a touch device the on-screen pad appears automatically and the sheet fills the screen:
-left, right, dash and jump as drawn glyphs, and a pause control at the top right. The key
-list and the dash button both hide themselves on sheets where dash is not yours yet.
+On a touch device the on-screen pad appears automatically: left, right, dash and jump as
+drawn glyphs, and a pause control at the top right. The key list and the dash button both
+hide themselves on sheets where dash is not yours yet.
+
+Where the screen is tall enough to have room to spare — a phone or a tablet held upright —
+the pads do not sit on the sheet at all. The sheet is placed in the upper part of the
+screen and the pads take the band underneath it: eyes up, thumbs down, and nothing covering
+the drawing you are reading. A phone held sideways has no room to spare, so there the pads
+overlay the sheet as before, low and to the outside.
 
 ## Introductions
 
@@ -252,6 +267,11 @@ Ad handling follows Poki's lifecycle rules rather than any schedule of our own:
 call order and asserts all of the above.
 
 ## Saves
+
+Progress lives in this browser, on this device, and nowhere else. There is no account and
+nothing is sent anywhere. The game says so on the Controls page and again beside *Erase
+progress* in the sheet list, so nobody has to guess where their sheets went. Clearing your
+browser's site data clears them too, and a private window keeps nothing once it closes.
 
 One `localStorage` key, `constraint.save.v1`: progress, best times, parts, ranks, the daily
 streak, ghost recordings and your three builder slots.

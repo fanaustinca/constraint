@@ -69,9 +69,33 @@ node tools/pokicheck.js              # Poki SDK lifecycle, vs a mock SDK
 node tools/pokicheck.js index.html   # (defaults to poki/index.html)
 node tools/buildercheck.js           # builder palette and unlocks
 node tools/bounds.js                 # no out-of-bounds frames, 153 sheets
-node tools/solvability.js            # bot plays all 600 — SLOW, unseeded
+node tools/solvability.js            # random bot plays all 600 — SLOW, unseeded
+node tools/deliberate.js 3 4         # rule-based bot, no dice: proof a sheet is fair
 node tools/lasttest.js               # just the final sheet   (run from tools/)
 ```
+
+And the one that runs in a real browser:
+
+```bash
+mkdir -p ~/.cbrowser && cd ~/.cbrowser && npm init -y && npm i puppeteer
+cd /home/austin/constraint
+NODE_PATH=$HOME/.cbrowser/node_modules node tools/browsercheck.js
+NODE_PATH=... node tools/browsercheck.js --only ads          # one phase
+NODE_PATH=... node tools/browsercheck.js --file index.html   # the Pages build
+NODE_PATH=... node tools/browsercheck.js --shots /tmp/shots  # a png per layout
+```
+
+`browsercheck.js` walks the Poki submission checklist against headless Chrome
+with the CDN intercepted by a recording mock SDK (`tools/browser.js`). 333
+checks in twelve phases: `boot lifecycle ads rewarded refused adblock storage
+focus layout resize builder play`. **Its `ok()` really asserts** — unlike
+`stress.js`'s, see Traps 1.
+
+If `npx puppeteer browsers install chrome` fails with "no zip archiver is
+available", there is no `unzip` on this machine: fetch
+`https://storage.googleapis.com/chrome-for-testing-public/<ver>/linux64/chrome-linux64.zip`
+and extract it into `~/.cache/puppeteer/chrome/linux-<ver>/` with python's
+`zipfile`, restoring the exec bits from `external_attr`.
 
 Cadence that works: run `stress`, `pokicheck`, `buildercheck` and `bounds` in
 parallel; put `solvability` in the background; only run the full serial battery
@@ -136,10 +160,13 @@ Two shipped-black-page bugs came from this.
 **4. `solvability.js` uses an unseeded bot.** Results churn between roughly
 595 and 598 of 600 run to run. Only a *consistent* failure is signal.
 
-**5. There is no canvas backend or headless browser on this machine.** Every
-visual claim in this repo's history was verified numerically, never seen. Layout
-geometry can be computed and asserted; *appearance* cannot. Say so rather than
-implying otherwise.
+**5. ~~There is no canvas backend or headless browser on this machine.~~**
+There is now: Chrome for Testing under `~/.cache/puppeteer`, driven by
+`tools/browser.js`. `browsercheck.js --shots DIR` writes a png per layout, and
+the canvas really rasterises (swiftshader), so a layout can be *looked at*.
+The older warning still applies to the node sandboxes: `stress.js` and friends
+compute geometry and cannot see a paint. Do not claim in their name that
+something looks right.
 
 **6. `stress.js` ignores bare arguments.** `node tools/stress.js edview` runs
 everything. The phase filter is `--only edview`.
@@ -266,6 +293,22 @@ All of it lives in the `ADS` object (`game.html` ~line 1840).
 - `gameplayStop()` before every ad. No input, audio or simulation while one is
   up (`ADS.lock(true)` sets `body.adlock`, kills input and audio).
 
+All of it is also asserted in a real browser by `browsercheck.js` — phases
+`boot`, `lifecycle`, `ads`, `rewarded`, `refused` and `adblock` — including the
+things a mock in node cannot show: that the simulation is frozen and the audio
+off while a break is up, that a real key press does not cut one short, that
+`body.adlock` is what the stylesheet actually applies, and that a hidden tab
+closes the session. The last one needs a *real* tab switch: `visibilitychange`
+reaches the window listener by bubbling, and a synthetic `new Event(...)`
+without `bubbles:true` never gets there, which looks exactly like a game that
+ignores the tab going away.
+
+The live SDK has been exercised too (`sdk:'real'` in `tools/browser.js`):
+`init()` resolves in about 1.2s, `gameLoadingFinished()` follows it, and
+`gameplayStart()` follows the first click on Start. Everything else that page
+then loads — doubleclick, amazon-adsystem, imasdk — is the SDK's own doing, not
+the game's.
+
 **Frequency.** Poki caps ads itself; on top of that there is a floor of
 `ADS.GAP = 5 minutes`, checked at the end of a sheet. This is a *retention*
 decision, not a fix for broken capping. A refused break still walks the player
@@ -289,6 +332,32 @@ builder` in the artifact) and an owned one says `✓ unlocked`. `pokicheck`'s
 `remix` phase clears forty sheets and asserts none of them became owned.
 
 ---
+
+### The rest of the checklist
+
+Not everything Poki asks about is an ad. What the rest of it comes to here:
+
+- **Usernames and chat.** There are none, and no leaderboard, no sharing and no
+  free-text field of any kind — builder slots are numbered 1, 2, 3. So the
+  profanity-filter and moderation items do not apply. The one text input in the
+  tree is the rev-code box, and `pokihtml.js` strips it out of both builds.
+- **Saved data must be labelled.** It is, in two places a player can find:
+  "Saved in this browser" beside *Erase progress* in the sheet list, and a
+  *Saved data* paragraph on the Controls page naming local storage, saying
+  nothing is sent anywhere, and saying an incognito window keeps nothing.
+  `browsercheck`'s `storage` phase asserts both are present.
+- **Incognito.** Every `browsercheck` run is a fresh profile, so the empty-store
+  path is exercised on every phase; `storage` also asserts an empty store reads
+  as a new player, and then runs the whole game against a `localStorage` whose
+  every method throws — harsher than any real private mode.
+- **Pointer lock.** The game never asks for it. `ads` asserts
+  `document.pointerLockElement` is empty while a break is up anyway.
+- **Focus and scrolling.** `focus` presses space and each cursor key with the
+  frame forced scrollable and asserts `scrollY` never moves, and separately that
+  the embed body is `overflow:hidden` so the keys the game does *not* claim have
+  nothing to scroll either.
+- **External resources.** One: the SDK script tag. `boot` fails if the page asks
+  for anything else. What the SDK itself then loads is the SDK's business.
 
 ## 7. The builder viewport — the most-revised code in the project
 
@@ -353,6 +422,63 @@ be hidden for the box being small; it hides for the *builder* only
 hides `.cmd` for `tightv`/`shortv`/`narrowv`.
 
 ---
+
+## 7a. The play viewport on a phone
+
+Play is a fixed 32:18 and a portrait phone is not. On a 390x844 screen the sheet
+gets 390x219 — 26% of the display — and the rest is slack. It used to be *split*:
+the sheet centred, half the slack above it and half below, with the thumb pads
+drawn on top of the sheet itself because `.touch` is `inset:0` of `.stage`. A
+third of the one part of the screen the player is reading was under a button.
+
+`edDeck(boxH, stageH)` decides otherwise. When the slack is at least `DECKFREE`
+(220px) and `touchUI()` says pads are going to be drawn, it returns where to put
+the sheet and how far the touch layer has to reach below it:
+
+```
+top  = max(BARPX+8, (boxH - DECKBAND - stageH) / 2)     DECKBAND = 300
+deck = boxH - top - stageH
+```
+
+`fit()` writes `top` as the stage's **margin-top with margin-bottom:auto**, and
+`setDeck()` writes `deck` into `--deck` on `<html>` plus `body.deck`, which the
+stylesheet reads as `body.deck .touch{bottom:calc(0px - var(--deck))}`. The pads
+land at the bottom of the screen, the sheet sits above them, nothing overlaps.
+
+**Which margin you set is not a free choice.** `body.embed .stage` is
+`margin:auto`. Setting `margin-bottom` leaves the auto top to eat all the slack
+and the sheet goes to the *bottom* of the box — measured: `margin-bottom:287px`
+on an 844px box put the stage at y=338, not the y=169 that centring would give.
+Set the top and leave the bottom auto; then the top lands exactly where it is
+put. This cost an hour. It is the same lesson as `edFillPanel`: measure, do not
+predict.
+
+A landscape phone has no slack (844x390 draws 693x390) so `edDeck` returns null
+and nothing changes — the pads overlay the sheet as they always have, because
+there is nowhere else for them to be.
+
+Measured, all with the full 18 rows and the whole bar:
+
+```
+box         deck   sheet at        pads clear of the bottom
+390x844     yes    390x219 @ y163  27px
+360x640     yes    360x203 @ y69   23px
+768x1024    yes    768x432 @ y146  35px
+844x390     no     693x390 @ y0    —  (overlays the sheet, nowhere else to go)
+667x375     no     667x375 @ y0    —
+```
+
+Two more phone-sized faults went with it:
+
+- **The thumb pads were sized by percentage padding**, which cannot take a
+  minimum: a `min-width` leaves `padding-bottom` computed from the container and
+  the circle becomes an ellipse. They use `aspect-ratio:1` now, so `.pz` can
+  have `min-width:44px` — it was coming out 36px on a 360px phone.
+- **`@media (max-width:560px)` hid `.bar .field:nth-child(n+6)`**, which is every
+  field past the spacer: the clock, the deaths and the parts. A phone player saw
+  the wordmark and the constraint name and nothing about their own run. Dropped
+  the wordmark and the constraint name instead, off `body.narrowv` rather than a
+  width query — Trap 2 again, and the rest of that media block moved with it.
 
 ## 8. Save format
 
@@ -455,25 +581,37 @@ A cached copy is indistinguishable from an unfixed one — **hard-refresh**
 
 ## 11. State of play
 
-Green at last check: `stress` 5243/0, `pokicheck` all clear on both builds,
-`buildercheck` all clear, `bounds` 0 out-of-bounds frames across 153 sheets.
+Green at last check: `stress` 5243/0, `browsercheck` 333/0 in a real browser,
+`pokicheck` all clear on both builds, `buildercheck` all clear, `bounds` 0
+out-of-bounds frames across 153 sheets.
+
+### Closed since last time
+
+1. **Sheet 4 (FIXED / "Chamfer") is fine.** `tools/deliberate.js 3 4` clears it
+   in 593 frames with **zero deaths**. The random bot cannot, and never will:
+   the `roof` chunk is six columns of ceiling with down-spikes under it, then a
+   single free column, then floor spikes — so there is a stretch where any jump
+   is fatal followed by a jump that is mandatory. Dice die there. The launch
+   window is x∈[1366,1396], about 8 frames at full run, and roughly 62% of the
+   corridor between the end of the ceiling and the spikes works. Nothing to fix;
+   `solvability.js` will keep reporting it, and that report means nothing.
+2. **Sheet 552 (DEEPFREEZE / "Pack")** turned up in one full run. Re-run on its
+   own it cleared 1 of 3 times — inside the normal 595–598 churn, not a signal.
+3. **Things have been looked at now.** See Trap 5 and §7a.
 
 ### Known open items
 
-1. **Sheet 4 (FIXED / "Chamfer") fails the solvability bot on every single
-   run.** The bot is unseeded so the rest of its output churns 595–598/600, but
-   this one is consistent and is the only real signal in that tool. Not
-   investigated. Worth a look before submission.
-2. **Winter's taster** — the original design named only Space, Portals, Code and
+1. **Winter's taster** — the original design named only Space, Portals, Code and
    Whiteout; all five side acts currently get one. Never resolved either way.
-3. **Nothing visual has ever been looked at.** No canvas backend, no headless
-   browser. The one-row tight menu and the side column are new *arrangements*
-   whose geometry is asserted but whose appearance is unverified. If you can
-   open a browser, that is the highest-value thing you can do here.
+2. **The standalone `game.html` has no `<meta viewport>`** — only the generated
+   builds get one, so opening `game.html` itself on a phone renders at the 980px
+   default and zooms out. That build is the artifact, never the submission, so
+   it has been left alone. Worth knowing before testing on a phone from Windows.
 
 ### Recent history
 
 ```
+(this pass)  A phone that gets its screen back, and a browser to check it in
 57cf911  Keep the key strip on a short box
 d22e939  Take the menu out of the axis that costs the sheet least
 018d566  Say what the remix costs, not what it gives
@@ -490,7 +628,8 @@ node tools/extract.js && node tools/build.js && node tools/build-poki.js
 cmp index.html poki/index.html          # must be silent
 node tools/stress.js && node tools/pokicheck.js && \
 node tools/pokicheck.js index.html && node tools/buildercheck.js && node tools/bounds.js
-node tools/solvability.js               # slow; expect 595-598/600, sheet 4 always
+NODE_PATH=$HOME/.cbrowser/node_modules node tools/browsercheck.js
+node tools/solvability.js               # slow; expect 595-598/600, sheet 4 always — see §11
 ```
 
 Then open the Pages URL in the Poki Inspector and walk the SDK checklist by
