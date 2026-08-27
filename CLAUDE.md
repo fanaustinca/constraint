@@ -77,7 +77,11 @@ node tools/lasttest.js               # just the final sheet   (run from tools/)
 And the one that runs in a real browser:
 
 ```bash
-mkdir -p ~/.cbrowser && cd ~/.cbrowser && npm init -y && npm i puppeteer
+mkdir -p ~/.cbrowser && cd ~/.cbrowser \
+  && echo '{"name":"cbrowser","private":true}' > package.json \
+  && npm i puppeteer
+# not npm init -y: it names the package after the directory, and npm
+# rejects a name starting with a dot, so the && chain never installs
 cd /home/austin/constraint
 NODE_PATH=$HOME/.cbrowser/node_modules node tools/browsercheck.js
 NODE_PATH=... node tools/browsercheck.js --only ads          # one phase

@@ -10,13 +10,19 @@ const http=require('http'), fs=require('fs'), path=require('path');
 
 /* puppeteer is not a dependency of this repo — the repo ships one HTML file and
    has no package.json. Install it anywhere and point NODE_PATH at it:
-     mkdir -p ~/.cbrowser && cd ~/.cbrowser && npm init -y && npm i puppeteer
+     mkdir -p ~/.cbrowser && cd ~/.cbrowser
+     echo '{"name":"cbrowser","private":true}' > package.json
+     npm i puppeteer
+   npm init -y cannot be used here: it names the package after the directory,
+   and npm rejects a name beginning with a dot.
      NODE_PATH=~/.cbrowser/node_modules node tools/browsercheck.js            */
 function puppet(){
   try{ return require('puppeteer'); }
   catch(e){
     console.error('This tool needs puppeteer. Install it somewhere and set NODE_PATH:\n'+
-      '  mkdir -p ~/.cbrowser && cd ~/.cbrowser && npm init -y && npm i puppeteer\n'+
+      '  mkdir -p ~/.cbrowser && cd ~/.cbrowser\n'+
+      '  echo \'{"name":"cbrowser","private":true}\' > package.json\n'+
+      '  npm i puppeteer\n'+
       '  NODE_PATH=$HOME/.cbrowser/node_modules node tools/browsercheck.js');
     process.exit(2);
   }
