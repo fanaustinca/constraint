@@ -27,7 +27,7 @@ body{
   padding:8px 12px; font-size:11px; letter-spacing:.12em; text-transform:uppercase;
   color:var(--text-dim); flex-wrap:wrap;
 }
-/* Poki asks that a game storing a player's progress says so. It is one line,
+/* CrazyGames asks that a game storing a player's progress says so. It is one line,
    next to the button that erases it and again on the Controls page, so whoever
    goes looking for either finds it. */
 .savenote{
@@ -375,8 +375,8 @@ body.sidep .buildpanel{max-height:none}
    is on the sheet and make the panel denser.
 
    These are classes and not media queries on purpose. A media query and a vh
-   unit both describe the window, and on Poki the game is handed a container the
-   site sizes — at 640x360 inside a taller page every height query missed and the
+   unit both describe the window, and on CrazyGames the game is handed a container
+   the site sizes — at 640x360 inside a taller page every height query missed and the
    palette kept all three of its full-size rows. fit() already measures the real
    box for exactly this reason; edDensity() hangs the answer on <body>. */
 body.shortv .buildpanel{max-height:340px; padding:7px; gap:6px}
@@ -419,8 +419,8 @@ body.narrowv .buildpanel{padding:8px}
    phone the bar read "CONSTRAINT | SHEET 01 · FIRST SKETCH / CONSTRAINT FIXED"
    and nothing about the run at all. Drop the wordmark and the constraint name
    instead and keep the run.
-   Read off the measured class rather than a width media query: on Poki the box
-   is not the window, so a max-width query misses a 640-wide game in a 1440-wide
+   Read off the measured class rather than a width media query: on CrazyGames the
+   box is not the window, so a max-width query misses a 640-wide game in a 1440-wide
    page entirely. Same reason the rest of this block moved across. */
 body.narrowv .bar{gap:9px}
 body.narrowv .bar .mark, body.narrowv .bar .sep, body.narrowv .bar #conField{display:none}
@@ -1869,41 +1869,43 @@ const SFX={
 };
 
 /* --------------------------- host bridge -----------------------------
-   Poki's SDK when it is there, no-ops when it is not. The artifact and Pages
-   builds load no external script at all.
+   CrazyGames' SDK when it is there, no-ops when it is not. The artifact and
+   Pages builds load no external script at all.
 
-   Frequency is Poki's to decide, not ours: commercialBreak() is requested at
-   every clean sheet transition and their capping decides whether one runs.
-   A break is only ever requested when the destination is gameplay, never on
-   the way to a menu or an interlude.
+   Frequency is ours to decide here — unlike a platform with its own capping,
+   CrazyGames' ad.requestAd('midgame', …) plays whenever it is asked, so ADS.GAP
+   below is the only thing standing between a break and every clean sheet
+   transition. A break is only ever requested when the destination is
+   gameplay, never on the way to a menu or an interlude.
 
    While a break is on screen the game is frozen, muted, and takes no input,
-   and gameplayStart() cannot fire before gameLoadingFinished() has gone out.
+   and gameplayStart() cannot fire before game.loadingStop() has gone out.
    -------------------------------------------------------------------- */
-const POKI_BUILD=false;                 /* tools/build-poki.js flips this */
+const CRAZY_BUILD=false;                /* tools/build-crazy.js flips this */
 const ADS={
   ready:false, playing:false, announced:false, inAd:false,
   absent:false, failed:false, ready:false,
-  /* Every SDK milestone, stamped, in the Poki build only. When the Inspector
-     says a condition is unmet there is otherwise nothing to look at: the stub
-     queues calls silently and a queued call that never drains looks exactly
-     like a call that was never made. */
+  /* Every SDK milestone, stamped, in the CrazyGames build only. When a
+     submission check says a condition is unmet there is otherwise nothing to
+     look at: a call this code never made and a call the SDK silently dropped
+     look identical from the outside. */
   log(m){
-    if(!POKI_BUILD) return;
+    if(!CRAZY_BUILD) return;
     try{ console.info('%cCONSTRAINT%c '+Math.round(performance.now())+'ms  '+m,
       'background:#57D98A;color:#0A0F16;border-radius:3px;padding:1px 5px',''); }catch(e){}
   },
   init(){
-    /* The SDK is a separate script from Poki's CDN and there is no promise it
-       has run by the time this line does — a slow CDN, a sandboxed preview or a
-       copy injected around the game can all land after us. Looking once and
-       giving up was the difference between a game with ads and a game Poki
-       cannot see at all: no init, so no gameLoadingFinished, no gameplay
-       events, and every rewarded video quietly unavailable. Wait for it. */
+    /* The SDK is a separate script from CrazyGames' CDN and there is no
+       promise it has run by the time this line does — a slow CDN, a
+       sandboxed preview or a copy injected around the game can all land
+       after us. Looking once and giving up was the difference between a
+       game with ads and a game CrazyGames cannot see at all: no init, so no
+       loadingStop, no gameplay events, and every rewarded video quietly
+       unavailable. Wait for it. */
     const appear=new Promise(r=>{
       let n=0;
       (function look(){
-        if(window.PokiSDK) return r(true);
+        if(window.CrazyGames && window.CrazyGames.SDK) return r(true);
         if(++n>60) return r(false);                          /* ~3s, then give up */
         setTimeout(look,50);
       })();
@@ -1911,42 +1913,41 @@ const ADS={
     return appear.then(found=>{
       if(!found){
         ADS.absent=true;
-        if(POKI_BUILD) try{ console.warn('CONSTRAINT: window.PokiSDK never appeared. '+
-          'No ads and no SDK events are possible. Is poki-sdk.js in this page and '+
-          'reachable? A build without the script tag looks exactly like this.'); }catch(e){}
+        if(CRAZY_BUILD) try{ console.warn('CONSTRAINT: window.CrazyGames never appeared. '+
+          'No ads and no SDK events are possible. Is crazygames-sdk-v3.js in this page '+
+          'and reachable? A build without the script tag looks exactly like this.'); }catch(e){}
         return;
       }
-      ADS.log('window.PokiSDK found, calling init()');
+      ADS.log('window.CrazyGames.SDK found, calling init()');
       /* never hang the game on the SDK — if init does not settle, start anyway */
       return Promise.race([
-        PokiSDK.init().then(()=>{ ADS.ready=true; ADS.log('init() resolved'); })
+        CrazyGames.SDK.init().then(()=>{ ADS.ready=true; ADS.log('init() resolved');
+          try{ CrazyGames.SDK.game.loadingStart(); }catch(e){} })
                       .catch(()=>{ ADS.failed=true; ADS.log('init() REJECTED'); }),
         new Promise(r=>setTimeout(r, 8000))
       ]).then(()=>{
-        /* the stub resolves nothing until poki-sdk-core-*.js loads and drains
-           its queue, so an unresolved init is the one symptom worth naming */
         if(!ADS.ready && !ADS.failed)
-          ADS.log('init() has NOT resolved after 8s — the core SDK script has '+
-                  'not loaded, so every queued call is still waiting');
+          ADS.log('init() has NOT resolved after 8s — every call queued behind it '+
+                  'is still waiting');
       });
     });
   },
   loaded(){
     ADS.announced=true;
     if(!ADS.last) ADS.last=Date.now();   /* the first break is five minutes in, not instant */
-    ADS.log('gameLoadingFinished()');
-    try{ window.PokiSDK && PokiSDK.gameLoadingFinished(); }catch(e){}
+    ADS.log('game.loadingStop()');
+    try{ window.CrazyGames && CrazyGames.SDK.game.loadingStop(); }catch(e){}
   },
   playStart(){
     if(ADS.playing || ADS.inAd || !ADS.announced) return;
     ADS.playing=true;
-    ADS.log('gameplayStart()');
-    try{ window.PokiSDK && PokiSDK.gameplayStart(); }catch(e){}
+    ADS.log('game.gameplayStart()');
+    try{ window.CrazyGames && CrazyGames.SDK.game.gameplayStart(); }catch(e){}
   },
   playStop(){
     if(!ADS.playing) return; ADS.playing=false;
-    ADS.log('gameplayStop()');
-    try{ window.PokiSDK && PokiSDK.gameplayStop(); }catch(e){}
+    ADS.log('game.gameplayStop()');
+    try{ window.CrazyGames && CrazyGames.SDK.game.gameplayStop(); }catch(e){}
   },
   lock(on){
     ADS.inAd=on;
@@ -1956,11 +1957,11 @@ const ADS={
        nothing fires a window resize when it does */
     else try{ fit(); }catch(e){}
   },
-  /* The shortest a player may go between commercial breaks. This used to be
-     Poki's call alone and ours not at all — no timer here, their capping
-     decides. In practice that meant a break at the end of every sheet, and a
-     sheet can be forty seconds long, which is nobody's idea of a game. Their
-     cap still applies on top; this is only a floor beneath it. */
+  /* The shortest a player may go between ads. CrazyGames plays a midgame ad
+     whenever one is requested — there is no capping on their side to lean
+     on — so this floor is the only thing between a break and every sheet
+     transition. Without it a break would run at the end of every sheet, and
+     a sheet can be forty seconds long, which is nobody's idea of a game. */
   GAP: 5*60*1000,
   last: 0,
   due(){ return (Date.now()-ADS.last) >= ADS.GAP; },
@@ -1969,12 +1970,14 @@ const ADS={
     /* asked too soon after the last one: walk straight on, no break, no stop */
     if(!ADS.due()){ then(); return; }
     ADS.playStop();                      /* gameplayStop always precedes an ad */
-    if(!window.PokiSDK){ ADS.spent(); then(); return; }
+    if(!window.CrazyGames){ ADS.spent(); then(); return; }
     ADS.spent();
     const wasOn=A.on;
     const done=()=>{ ADS.lock(false); A.on=wasOn; clearInput(); then(); };
     try{
-      PokiSDK.commercialBreak(()=>ADS.lock(true)).then(done).catch(done);
+      CrazyGames.SDK.ad.requestAd('midgame', {
+        adStarted:()=>ADS.lock(true), adFinished:done, adError:done
+      });
     }catch(e){ done(); }
   },
   rewarded(then){
@@ -1983,18 +1986,21 @@ const ADS={
        this whole gap exists to prevent */
     ADS.spent();
     ADS.playStop();
-    if(!window.PokiSDK){
+    if(!window.CrazyGames){
       /* No SDK at all. In the artifact build there is no ad economy to protect,
-         so the unlock is simply granted. In the shipped build — Poki and Pages
-         alike, which are the same bytes — the SDK is the only way to earn one,
-         and a blocked ad must not pay out. */
-      then(!POKI_BUILD); return;
+         so the unlock is simply granted. In the shipped build — CrazyGames and
+         Pages alike, which are the same bytes — the SDK is the only way to
+         earn one, and a blocked ad must not pay out. */
+      then(!CRAZY_BUILD); return;
     }
     const wasOn=A.on;
     const done=ok=>{ ADS.lock(false); A.on=wasOn; clearInput(); then(ok); };
     try{
-      PokiSDK.rewardedBreak({size:'medium', onStart:()=>ADS.lock(true)})
-        .then(ok=>done(!!ok)).catch(()=>done(false));
+      CrazyGames.SDK.ad.requestAd('rewarded', {
+        adStarted:()=>ADS.lock(true),
+        adFinished:()=>done(true),
+        adError:()=>done(false)
+      });
     }catch(e){ done(false); }
   }
 };
@@ -2035,9 +2041,11 @@ function flagMap(o){
     for(const k of Object.keys(o)) if(k!=='__proto__' && o[k]) out[k]=1;
   return out;
 }
-/* Read again once the SDK has initialised: on Poki a signed-in player's cloud
-   save is written into localStorage during init(), so the first read can be
-   the stale local copy. */
+/* Read again once the SDK has initialised. Unlike Poki, CrazyGames does not
+   mirror a signed-in player's cloud save into plain localStorage on its own —
+   that needs the separate CrazyGames.SDK.data API, which this build does not
+   use — so this second read is a harmless no-op here, kept in case that ever
+   changes. */
 function loadSave(){
 SAVE={unlocked:1, best:{}, parts:{}, skipped:{}, cuts:{}, rank:0, daily:null, ghosts:{}, dev:0, mute:false, unl:null};
 try{
@@ -3697,7 +3705,7 @@ const MINTILE=20, BARPX=34;    /* the title strip above the sheet */
    to there — smaller than MINTILE on purpose, because seeing all eighteen rows
    at 14px beats seeing eight of them at 20px when there is no third option. */
 const TIGHTROW=58, TIGHTTILE=12;
-/* The size of the box the game actually has, which is not the window's. On Poki
+/* The size of the box the game actually has, which is not the window's. On CrazyGames
    the site hands the game a container and resizes it; a vh unit and a media
    query both describe the window around that container, so at 640x360 inside a
    taller page every height rule missed and the palette kept three full rows.
@@ -5102,7 +5110,7 @@ function play(i){
 }
 /* Anything on this sheet the player has not met before gets a card, once ever.
    The clock does not run behind it — 'intro' is not 'play', so the timer, the
-   simulation and Poki's gameplay session all wait for the card to be closed.
+   simulation and CrazyGames' gameplay session all wait for the card to be closed.
    Never during the ranking test: that is meant to be met cold. */
 const INTRO_MAX=5;
 function showIntro(){
@@ -5149,7 +5157,7 @@ function nextLevel(){
      only allowed when the player is walking straight back into gameplay: never
      on the way to a menu, a daily summary, the builder, or an interlude. It is
      also only allowed if it has been ADS.GAP since the last one — see there for
-     why the frequency is not left entirely to Poki. */
+     why that floor exists at all. */
   let dest, playable=false;
   if(G.lvl===-2)   dest=()=>{ G.state='menu'; showOv('ovMenu'); };
   else if(G.lvl<0) dest=()=>openBuild();
@@ -5327,7 +5335,7 @@ function buildPicker(){
              the remix as well. The tag says the price now, and the owned one
              says it is spent. */
           (REMIX&&!lock? (owned?'<span class="buytag own">\u2713 unlocked</span>'
-                               :(POKI_BUILD?'<span class="buytag">\u25b8 video to open</span>'
+                               :(CRAZY_BUILD?'<span class="buytag">\u25b8 video to open</span>'
                                            :'<span class="buytag">\u25b8 open in builder</span>')) : '')+
           '<span class="m">'+(best!==undefined?'<span class="done">'+fmt(best)+'s</span>'
               :(skip?'<span>skipped</span>':'<span>—</span>'))+
@@ -5373,13 +5381,13 @@ function askAd(kind, text, sub, grant, done){
   $('adText').textContent=text;
   /* say the price out loud. The button reading "Watch a video" was the only
      hint an ad was coming, which is not a thing to find out after clicking. */
-  $('adSub').textContent = POKI_BUILD
+  $('adSub').textContent = CRAZY_BUILD
     ? ((sub? sub+' ' : '')+'A short video ad plays first.')
     : (sub||'');
-  $('adGo').innerHTML = POKI_BUILD
+  $('adGo').innerHTML = CRAZY_BUILD
     ? '<span class="adtag">\ud83c\udfac</span> Watch a video'
     : 'Unlock';
-  $('adGo').classList.toggle('reward', POKI_BUILD);
+  $('adGo').classList.toggle('reward', CRAZY_BUILD);
   showOv('ovAd');
 }
 $('adGo').onclick=()=>{
@@ -5777,7 +5785,7 @@ function tryCode(){
   }
 }
 /* the rev-code box exists in the artifact build only — tools/build.js and
-   tools/build-poki.js cut the markup out entirely, so these may be absent */
+   tools/build-crazy.js cut the markup out entirely, so these may be absent */
 if($('btnCode')) $('btnCode').onclick=tryCode;
 if($('devCode')) $('devCode').addEventListener('keydown',e=>{
   e.stopPropagation();
@@ -5867,7 +5875,7 @@ function loop(ts){
   if(G.state==='play') { $('hudTime').textContent=fmt(G.time); }
   draw();
 }
-/* Startup order matters to Poki: gameLoadingFinished() has to go out before
+/* Startup order matters to CrazyGames: game.loadingStop() has to go out before
    anything can reach gameplay, so the menu stays behind a loading panel until
    init() settles. It always settles — ADS.init races an eight second timeout,
    so a blocked or slow SDK cannot strand the player on this screen. */
@@ -5885,7 +5893,7 @@ ADS.init().then(()=>{
   loadLevel(Math.min(SAVE.unlocked-1,LEVELS.length-1));
   G.state='menu'; refreshMenu(); showOv('ovMenu');
 });
-if(POKI_BUILD){
+if(CRAZY_BUILD){
   $('btnSkip').innerHTML='<span class="adtag">\ud83c\udfac</span> Skip sheet';
   $('btnSkip').classList.add('reward');
 }

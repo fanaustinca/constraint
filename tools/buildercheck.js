@@ -1,5 +1,5 @@
 /* The builder: share codes, remixing an official sheet, and what each theme
-   does to a custom sheet. Ad and SDK behaviour lives in tools/pokicheck.js.
+   does to a custom sheet. Ad and SDK behaviour lives in tools/crazycheck.js.
 
      node tools/buildercheck.js                                             */
 const {run, ink}=require(require('path').join(__dirname,'harness.js'));

@@ -61,10 +61,10 @@ never walks the same path. They never advance story progression.
 ## Layout
 
 `game.html` is the source of truth — it has no `<!doctype>` or `<head>` because the Claude
-artifact platform supplies those. `index.html` and `poki/index.html` are both generated from
-it, and are **byte-identical**: the build GitHub Pages serves is the build submitted to Poki,
-SDK and all. Testing something other than what you ship is how a problem stays hidden until
-the reviewer finds it. **Edit `game.html`, never the generated files.**
+artifact platform supplies those. `index.html` and `crazygames/index.html` are both generated
+from it, and are **byte-identical**: the build GitHub Pages serves is the build submitted to
+CrazyGames, SDK and all. Testing something other than what you ship is how a problem stays
+hidden until the reviewer finds it. **Edit `game.html`, never the generated files.**
 
 ```bash
 node tools/build.js     # game.html -> index.html   (run before every commit)
@@ -99,12 +99,12 @@ node solvability.js         # bot-plays all 600 sheets, reports any it cannot fi
 node solvability.js 0 60    # or just a range
 node bounds.js              # asserts the player never leaves the sheet
 cd ..
-node tools/pokicheck.js poki/index.html   # SDK lifecycle and ad rules
-node tools/buildercheck.js                # share codes, remixing, themes
-node tools/stress.js                      # everything else, see below
+node tools/crazycheck.js crazygames/index.html   # SDK lifecycle and ad rules
+node tools/buildercheck.js                       # share codes, remixing, themes
+node tools/stress.js                             # everything else, see below
 ```
 
-`tools/browsercheck.js` runs the game in headless Chrome — the Poki submission checklist
+`tools/browsercheck.js` runs the game in headless Chrome — the CrazyGames submission checklist
 in twelve phases, 333 assertions, with the SDK intercepted by a mock that records every
 lifecycle call in order. It checks what a node sandbox cannot: that the simulation really
 freezes and the audio really goes off while an ad is up, that a real key press cannot cut
@@ -214,57 +214,57 @@ overlay the sheet as before, low and to the outside.
 Every sheet is scanned on load for the things it contains — abilities, tile types, hazards,
 world modifiers — and anything the player has not met before gets a card at the start of the
 sheet, once ever. Twenty-two cards across a full run, the first on sheet 1 and the last on
-534. The card is not gameplay: the clock, the simulation and Poki's gameplay session all
+534. The card is not gameplay: the clock, the simulation and CrazyGames' gameplay session all
 wait behind it. The ranking test never shows one, because it is meant to be met cold.
 
 ## Builds
 
-Two targets come out of the one source, from one generator in `tools/pokihtml.js`
+Two targets come out of the one source, from one generator in `tools/crazyhtml.js`
 so they cannot drift apart:
 
 ```bash
-node tools/build.js       # game.html -> index.html      (GitHub Pages)
-node tools/build-poki.js  # game.html -> poki/index.html (upload this folder)
+node tools/build.js        # game.html -> index.html             (GitHub Pages)
+node tools/build-crazy.js  # game.html -> crazygames/index.html  (upload this folder)
 ```
 
-Both are the Poki build: document shell added, dev code and the rev-code box stripped,
-Poki's SDK loaded, full-screen embed layout. They are the only builds that request anything
-from another origin, and `cmp index.html poki/index.html` must report no difference.
+Both are the CrazyGames build: document shell added, dev code and the rev-code box stripped,
+the CrazyGames SDK loaded, full-screen embed layout. They are the only builds that request
+anything from another origin, and `cmp index.html crazygames/index.html` must report no
+difference.
 
 The Claude artifact runs `game.html` directly, so it is the one place the game exists with
-`POKI_BUILD=false` — no SDK, no ad economy, and the optional unlocks simply granted.
+`CRAZY_BUILD=false` — no SDK, no ad economy, and the optional unlocks simply granted.
 
-In the Poki build every SDK milestone is stamped to the browser console with a timing —
-SDK found, `init()` called, resolved or rejected, `gameLoadingFinished()`, `gameplayStart()`,
-`gameplayStop()`. Poki's `poki-sdk.js` is only a stub that queues calls until a second script,
-`poki-sdk-core-*.js`, loads and drains the queue, so a call that was made but never ran is
-otherwise indistinguishable from one that was never made.
+In the CrazyGames build every SDK milestone is stamped to the browser console with a timing —
+SDK found, `init()` called, resolved or rejected, `game.loadingStart()`, `game.loadingStop()`,
+`game.gameplayStart()`, `game.gameplayStop()`.
 
-Ad handling follows Poki's lifecycle rules rather than any schedule of our own:
+Ad handling follows CrazyGames' lifecycle rules, with one schedule of our own on top:
 
-- **Five minutes between breaks, at least.** `commercialBreak()` used to be requested at every
-  clean sheet transition, with Poki's capping left to decide. Their cap does work, but a sheet
-  can be forty seconds long, and an interstitial every forty seconds is not a game anyone stays
-  in. `ADS.GAP` is a floor beneath their cap, not a replacement for it: a break asked for too
-  soon is refused outright and the player walks straight on, and the SDK is not troubled. Over
-  half an hour of forty-second sheets that is 5 breaks rather than 45. A rewarded video the
-  player chose also pushes the next break back — it is still a video they just watched.
-- **Only back into gameplay.** A break is never requested on the way to a menu, a daily
+- **Five minutes between ads, at least.** CrazyGames' `ad.requestAd('midgame', …)` plays
+  whenever it is asked, with no capping of its own — so `ADS.GAP` is the only thing standing
+  between a break and every clean sheet transition. A sheet can be forty seconds long, and an
+  interstitial every forty seconds is not a game anyone stays in. A break asked for too soon is
+  refused outright and the player walks straight on, and the SDK is not troubled. Over half an
+  hour of forty-second sheets that is 5 breaks rather than 45. A rewarded video the player chose
+  also pushes the next ad back — it is still a video they just watched.
+- **Only back into gameplay.** An ad is never requested on the way to a menu, a daily
   summary, the builder, or an interlude — `nextLevel()` resolves the destination first.
-- **`gameLoadingFinished()` before anything else.** The menu stays behind a loading panel
-  until `PokiSDK.init()` settles, and `gameplayStart()` cannot fire before it. `init()` races
-  an eight second timeout so a blocked SDK cannot strand anyone.
+- **`game.loadingStop()` before anything else.** The menu stays behind a loading panel
+  until `CrazyGames.SDK.init()` settles, and `gameplayStart()` cannot fire before it. `init()`
+  races an eight second timeout so a blocked SDK cannot strand anyone.
 - **Frozen during a break.** Audio off, simulation halted, keyboard and pointer ignored, the
   whole page click-locked, `gameplayStop()` first.
 - **Every reward is asked for first.** No video ever starts off a bare click: Skip and both
   optional unlocks raise a prompt that names what you get and says plainly that a short video
   ad plays first. Declining costs nothing and returns you where you were.
-- **Rewards need a real view.** In the Poki build an incomplete or blocked ad grants nothing.
-  In the standalone builds there is no ad economy, so the optional unlocks are simply given.
+- **Rewards need a real view.** In the CrazyGames build, `ad.requestAd('rewarded', …)` calling
+  `adError` instead of `adFinished` grants nothing. In the standalone builds there is no ad
+  economy, so the optional unlocks are simply given.
 - **A hidden tab is not gameplay** — `visibilitychange` closes the session and pauses.
 
-`node tools/pokicheck.js poki/index.html` runs a built file against a mock SDK that records
-call order and asserts all of the above.
+`node tools/crazycheck.js crazygames/index.html` runs a built file against a mock SDK that
+records call order and asserts all of the above.
 
 ## Saves
 
@@ -276,11 +276,11 @@ browser's site data clears them too, and a private window keeps nothing once it 
 One `localStorage` key, `constraint.save.v1`: progress, best times, parts, ranks, the daily
 streak, ghost recordings and your three builder slots.
 
-In the artifact and Pages builds that is all it is — nothing leaves the browser. **On Poki it
-does leave the browser.** Poki's SDK syncs ordinary `localStorage` entries to their cloud for
-signed-in players, which is a feature (progress follows you between devices) but it does mean
-ghosts and custom sheets are stored on Poki's side too. A key prefixed `poki_ignore` opts out
-if that is ever not wanted.
+That is all it is in every build, CrazyGames included — nothing leaves the browser. Unlike
+Poki, CrazyGames does not mirror plain `localStorage` to a signed-in player's account on its
+own; that needs the separate `CrazyGames.SDK.data` API, which this build does not use. Cross-
+device sync is therefore a known gap versus the old Poki build, not a regression introduced
+by this one — the save behaves identically to the artifact and Pages builds everywhere.
 
 What comes back out is treated as untrusted regardless: own keys only, so a `__proto__` key
 cannot re-point the object, and every field coerced to the shape the game expects or dropped.

@@ -1,7 +1,7 @@
 # CONSTRAINT — working notes
 
 A 600-sheet browser precision platformer drawn as a CAD sketch, built for a
-Poki.com submission. Single file, no dependencies, no build step at runtime.
+CrazyGames.com submission. Single file, no dependencies, no build step at runtime.
 
 This document is for someone picking the project up cold. It covers how the
 thing is put together, which invariants matter, how to run the tests, and the
@@ -19,28 +19,28 @@ The repo lives at **`/home/austin/constraint`** (WSL2). GitHub remote:
 /home/austin/constraint/
   game.html            THE SOURCE. ~5800 lines: <style>, markup, one <script>.
   index.html           GENERATED. What GitHub Pages serves.
-  poki/index.html      GENERATED. What gets uploaded to Poki.
+  crazygames/index.html      GENERATED. What gets uploaded to CrazyGames.
   build/game.js        GENERATED, gitignored. The <script> body, for node.
   CLAUDE.md            this file
   README.md            player- and design-facing notes
   tools/               build + test scripts
 ```
 
-**Edit `game.html` only.** `index.html` and `poki/index.html` are written by
-`tools/build.js` and `tools/build-poki.js` from a single generator,
-`tools/pokihtml.js`, and are **byte-identical to each other on purpose** — so
+**Edit `game.html` only.** `index.html` and `crazygames/index.html` are written by
+`tools/build.js` and `tools/build-crazy.js` from a single generator,
+`tools/crazyhtml.js`, and are **byte-identical to each other on purpose** — so
 the public URL and the submission can never drift into being two different
-games. `cmp index.html poki/index.html` must always pass.
+games. `cmp index.html crazygames/index.html` must always pass.
 
 ### The three builds
 
-| build | `POKI_BUILD` | SDK | `DEVCODE` | rev-code box |
+| build | `CRAZY_BUILD` | SDK | `DEVCODE` | rev-code box |
 |---|---|---|---|---|
 | `game.html` (artifact/standalone) | `false` | none | `'AF010114'` | present |
-| `index.html` (Pages) | `true` | Poki v2 | `null` | stripped |
-| `poki/index.html` (submission) | `true` | Poki v2 | `null` | stripped |
+| `index.html` (Pages) | `true` | CrazyGames v3 | `null` | stripped |
+| `crazygames/index.html` (submission) | `true` | CrazyGames v3 | `null` | stripped |
 
-`POKI_BUILD` is the switch for everything ad-related. When it is `false` there
+`CRAZY_BUILD` is the switch for everything ad-related. When it is `false` there
 is no ad economy, so unlocks are simply granted; when `true` the SDK is the only
 way to earn one and a blocked ad must pay out nothing. Several behaviours branch
 on it — check both sides when you touch that code.
@@ -48,7 +48,7 @@ on it — check both sides when you touch that code.
 ### Rebuild after every change to `game.html`
 
 ```bash
-node tools/extract.js && node tools/build.js && node tools/build-poki.js
+node tools/extract.js && node tools/build.js && node tools/build-crazy.js
 ```
 
 `extract.js` must run before any harness-based tool, or you are testing the
@@ -64,9 +64,9 @@ node tools/stress.js                 # 5200+ checks, 21 phases   (fast)
 node tools/stress.js --only edview   # one phase
 node tools/stress.js --seed 7        # different seeded run
 node tools/stress.js --deep          # longer
-node tools/stress.js --file poki/index.html   # against a built file
-node tools/pokicheck.js              # Poki SDK lifecycle, vs a mock SDK
-node tools/pokicheck.js index.html   # (defaults to poki/index.html)
+node tools/stress.js --file crazygames/index.html   # against a built file
+node tools/crazycheck.js              # CrazyGames SDK lifecycle, vs a mock SDK
+node tools/crazycheck.js index.html   # (defaults to crazygames/index.html)
 node tools/buildercheck.js           # builder palette and unlocks
 node tools/bounds.js                 # no out-of-bounds frames, 153 sheets
 node tools/solvability.js            # random bot plays all 600 — SLOW, unseeded
@@ -89,7 +89,7 @@ NODE_PATH=... node tools/browsercheck.js --file index.html   # the Pages build
 NODE_PATH=... node tools/browsercheck.js --shots /tmp/shots  # a png per layout
 ```
 
-`browsercheck.js` walks the Poki submission checklist against headless Chrome
+`browsercheck.js` walks the CrazyGames submission checklist against headless Chrome
 with the CDN intercepted by a recording mock SDK (`tools/browser.js`). 333
 checks in twelve phases: `boot lifecycle ads rewarded refused adblock storage
 focus layout resize builder play`. **Its `ok()` really asserts** — unlike
@@ -101,7 +101,7 @@ available", there is no `unzip` on this machine: fetch
 and extract it into `~/.cache/puppeteer/chrome/linux-<ver>/` with python's
 `zipfile`, restoring the exec bits from `external_attr`.
 
-Cadence that works: run `stress`, `pokicheck`, `buildercheck` and `bounds` in
+Cadence that works: run `stress`, `crazycheck`, `buildercheck` and `bounds` in
 parallel; put `solvability` in the background; only run the full serial battery
 before an actual submission.
 
@@ -148,7 +148,7 @@ not seen fail.
 
 **2. A media query and a `vh` unit describe the window, not the box.**
 
-On Poki the game runs in a container the site sizes. At 640×360 inside a taller
+On CrazyGames the game runs in a container the site sizes. At 640×360 inside a taller
 page, every `@media (max-height: …)` misses. Layout decisions are therefore made
 in JS from a *measured* box (`edSpace()`), which sets classes on `<body>`
 (`tightv`, `shortv`, `narrowv`, `sidep`, `building`) that the stylesheet reads.
@@ -277,25 +277,34 @@ across four sets, no spill past the act edge, the road still moving on
 
 ---
 
-## 6. Ads and the Poki SDK
+## 6. Ads and the CrazyGames SDK
 
 All of it lives in the `ADS` object (`game.html` ~line 1840).
 
-**Lifecycle rules Poki checks for**, all asserted in `pokicheck.js`:
+**Lifecycle rules the SDK expects**, all asserted in `crazycheck.js`:
 
-- `PokiSDK.init()` before anything; `ADS.init()` polls for `window.PokiSDK` for
-  ~3s (via `setTimeout` recursion — `setInterval` does not exist in the
-  sandboxes) and logs diagnostics to the console in the Poki build.
-- `gameLoadingFinished()` once, when loading is done.
-- `gameplayStart()` **from player interaction**, `gameplayStop()` at the end.
-  The main loop derives this from state, so a pause, a tab switch and an ad
-  break each close the session:
+- `CrazyGames.SDK.init()` before anything; `ADS.init()` polls for
+  `window.CrazyGames && window.CrazyGames.SDK` for ~3s (via `setTimeout`
+  recursion — `setInterval` does not exist in the sandboxes) and logs
+  diagnostics to the console in the CrazyGames build.
+- `game.loadingStart()` once init resolves, `game.loadingStop()` once loading
+  is done — here that is immediately after, since there is no separate asset
+  fetch beyond the one HTML file.
+- `game.gameplayStart()` **from player interaction**, `game.gameplayStop()` at
+  the end. The main loop derives this from state, so a pause, a tab switch and
+  an ad break each close the session:
   ```js
   const live = (G.state==='play' && !ADS.inAd);
   if(live!==ADS.playing){ live ? ADS.playStart() : ADS.playStop(); }
   ```
-- `gameplayStop()` before every ad. No input, audio or simulation while one is
-  up (`ADS.lock(true)` sets `body.adlock`, kills input and audio).
+- `game.gameplayStop()` before every ad. No input, audio or simulation while
+  one is up (`ADS.lock(true)` sets `body.adlock`, kills input and audio).
+- `ad.requestAd(type, callbacks)` for both ad kinds — `'midgame'` for a break,
+  `'rewarded'` for an opt-in video — with `adStarted` locking the game,
+  `adFinished`/`adError` unlocking it. Unlike Poki's promise-returning
+  `commercialBreak()`/`rewardedBreak()`, CrazyGames' API is callback-based and
+  never rejects; `adError` is how a failed or blocked ad is told apart from a
+  successful one.
 
 All of it is also asserted in a real browser by `browsercheck.js` — phases
 `boot`, `lifecycle`, `ads`, `rewarded`, `refused` and `adblock` — including the
@@ -307,44 +316,46 @@ reaches the window listener by bubbling, and a synthetic `new Event(...)`
 without `bubbles:true` never gets there, which looks exactly like a game that
 ignores the tab going away.
 
-The live SDK has been exercised too (`sdk:'real'` in `tools/browser.js`):
-`init()` resolves in about 1.2s, `gameLoadingFinished()` follows it, and
-`gameplayStart()` follows the first click on Start. Everything else that page
-then loads — doubleclick, amazon-adsystem, imasdk — is the SDK's own doing, not
-the game's.
+`tools/browser.js` also supports pointing at the real SDK (`sdk:'real'`)
+instead of the mock, for exercising the actual CrazyGames CDN script by hand —
+this has not been run against the live CrazyGames CDN as part of this switch,
+only against the recording mock described above. Do that before a real
+submission, the same way the old Poki integration was checked against Poki's
+live script before its submissions.
 
-**Frequency.** Poki caps ads itself; on top of that there is a floor of
-`ADS.GAP = 5 minutes`, checked at the end of a sheet. This is a *retention*
-decision, not a fix for broken capping. A refused break still walks the player
-straight on and asks the SDK for nothing. A rewarded video pushes the next
-break back too.
+**Frequency.** CrazyGames applies no capping of its own — `ad.requestAd()`
+plays whenever it is asked — so `ADS.GAP = 5 minutes`, checked at the end of a
+sheet, is the *only* thing standing between a break and every sheet
+transition, not a floor under someone else's cap. A refused break still walks
+the player straight on and asks the SDK for nothing. A rewarded video pushes
+the next break back too.
 
 **Rewards.** Every video is opt-in behind a prompt (`askAd`) that names the
 price out loud — the shipped build appends "A short video ad plays first." to
 the prompt and labels the button "🎬 Watch a video". Nothing starts a video
-without that prompt; `pokicheck` has a phase asserting exactly that.
+without that prompt; `crazycheck` has a phase asserting exactly that.
 
 ```js
-if(!window.PokiSDK){ then(!POKI_BUILD); return; }   // blocked ad pays out nothing when shipped
+if(!window.CrazyGames){ then(!CRAZY_BUILD); return; }   // blocked ad pays out nothing when shipped
 ```
 
 **Remix economy.** Remixing is bought one sheet at a time (`SAVE.unl.lr[i]`).
 `SAVE.unl.wr[world]` is legacy — a whole set bought under an older rule — and is
 still honoured but never written. Clearing a sheet makes it *eligible*, never
 opens it; the card tag names the price (`▸ video to open`, or `▸ open in
-builder` in the artifact) and an owned one says `✓ unlocked`. `pokicheck`'s
+builder` in the artifact) and an owned one says `✓ unlocked`. `crazycheck`'s
 `remix` phase clears forty sheets and asserts none of them became owned.
 
 ---
 
 ### The rest of the checklist
 
-Not everything Poki asks about is an ad. What the rest of it comes to here:
+Not everything CrazyGames asks about is an ad. What the rest of it comes to here:
 
 - **Usernames and chat.** There are none, and no leaderboard, no sharing and no
   free-text field of any kind — builder slots are numbered 1, 2, 3. So the
   profanity-filter and moderation items do not apply. The one text input in the
-  tree is the rev-code box, and `pokihtml.js` strips it out of both builds.
+  tree is the rev-code box, and `crazyhtml.js` strips it out of both builds.
 - **Saved data must be labelled.** It is, in two places a player can find:
   "Saved in this browser" beside *Erase progress* in the sheet list, and a
   *Saved data* paragraph on the Controls page naming local storage, saying
@@ -422,7 +433,7 @@ pixelated on a monitor.
 **The key strip** (`.cmd`) is the only place a keyboard player is told the
 controls, including double jump — the intro card shows once ever. It must never
 be hidden for the box being small; it hides for the *builder* only
-(`body.building`). `pokicheck` parses the built stylesheet and asserts no rule
+(`body.building`). `crazycheck` parses the built stylesheet and asserts no rule
 hides `.cmd` for `tightv`/`shortv`/`narrowv`.
 
 ---
@@ -505,9 +516,13 @@ concatenated into the sheet list as markup. `loadSave()` copies own keys only
 every field through `numMap` / `strMap` / `flagMap`, dropping anything that will
 not coerce. The `save` stress phase covers this — keep it that way.
 
-Poki writes a signed-in player's cloud save into `localStorage` during `init()`,
-so `loadSave()` is called **again** after the SDK initialises; the first read can
-be a stale local copy.
+`loadSave()` is called **again** after the SDK initialises, a habit carried over
+from the old Poki build, where a signed-in player's cloud save landed in
+`localStorage` during `init()` and the first read could be a stale local copy.
+CrazyGames does not mirror a cloud save into plain `localStorage` the same
+way — that would need the separate `CrazyGames.SDK.data` API, which this game
+does not use — so the second read is now a harmless no-op, not a fix for a
+race that still exists.
 
 ---
 
@@ -515,7 +530,7 @@ be a stale local copy.
 
 - **Intro cards** (`showIntro`, `INTROS`, 29 keys): anything new on a sheet gets
   a card, once ever, max 5 at a time. `G.state='intro'` is not `'play'`, so the
-  clock, the simulation and the Poki gameplay session all wait. Never during the
+  clock, the simulation and the CrazyGames gameplay session all wait. Never during the
   ranking test — that is meant to be met cold.
 - **Ranking test** (`TEST`, `startTest`): drops you into trial 24 of 47 and
   binary-searches on whether you clear each one. Result is `SAVE.rank` 0..64.
@@ -537,42 +552,44 @@ automatically — Pages follows a `git push`, the other two are manual.
 
 | destination | file | how it gets there |
 |---|---|---|
-| **Poki submission** | `/home/austin/constraint/poki/index.html` | **upload this file by hand** in the Poki developer dashboard |
+| **CrazyGames submission** | `/home/austin/constraint/crazygames/index.html` | **upload this file by hand** in the CrazyGames developer dashboard |
 | **GitHub Pages** | `/home/austin/constraint/index.html` | `git push` — Pages serves repo root on `main` |
 | **Claude artifact** | `/home/austin/constraint/game.html` | published via the Artifact tool |
 
-**The Poki upload is a single self-contained HTML file.** No folder, no assets,
-no `build/`, no `tools/` — everything is inline except the SDK, which is pulled
-from `https://game-cdn.poki.com/scripts/v2/poki-sdk.js`. That CDN script tag is
-the only external request the game makes.
+**The CrazyGames upload is a single self-contained HTML file.** No folder, no
+assets, no `build/`, no `tools/` — everything is inline except the SDK, which
+is pulled from `https://sdk.crazygames.com/crazygames-sdk-v3.js`. That CDN
+script tag is the only external request the game makes.
 
-`poki/` holds nothing else, so uploading that directory and uploading the one
-file are the same thing. Never upload the repo root — it carries `game.html`,
-`tools/`, and `README.md`, none of which belong in a submission.
+`crazygames/` holds nothing else, so uploading that directory and uploading
+the one file are the same thing. Never upload the repo root — it carries
+`game.html`, `tools/`, and `README.md`, none of which belong in a submission.
 
 **Test on Pages, not on `file://`.** https://fanaustinca.github.io/constraint/
-is byte-identical to `poki/index.html`, so it is the submission. Opening
-`poki/index.html` from `file://` renders the game but the SDK will not load, so
-nothing ad-related is real there. Point the Poki Inspector at the Pages URL.
+is byte-identical to `crazygames/index.html`, so it is the submission. Opening
+`crazygames/index.html` from `file://` renders the game but the SDK will not
+load, so nothing ad-related is real there. Point the CrazyGames developer
+dashboard's Quality Assurance Tool at the Pages URL — its equivalent of Poki's
+Inspector — to walk the SDK checklist against the live CDN.
 
 That identity is recent and was bought the hard way. Until `8f499fa` the
-repo-root `index.html` was the *standalone* build — no SDK, `POKI_BUILD` false,
+repo-root `index.html` was the *standalone* build — no SDK, `CRAZY_BUILD` false,
 its own document shell — so the public URL exercised the one half of the code
-that could not reproduce an SDK complaint at all. `tools/pokihtml.js` now
+that could not reproduce an SDK complaint at all. `tools/crazyhtml.js` now
 writes both files from one generator, and `cmp` is what proves it. If `cmp`
 ever reports a difference, stop and fix the generator; do not hand-edit either
 output.
 
 From Windows the tree is at `\\wsl$\<distro>\home\austin\constraint` —
-useful for dragging `poki\index.html` into the Poki dashboard's file picker.
+useful for dragging `crazygames\index.html` into the CrazyGames dashboard's file picker.
 
 After any change: rebuild, confirm the two are identical, push, and wait for
 Pages to actually serve the new bytes before retesting.
 
 ```bash
 cd /home/austin/constraint
-node tools/build.js && node tools/build-poki.js   # both read game.html directly
-cmp index.html poki/index.html                   # must be silent
+node tools/build.js && node tools/build-crazy.js   # both read game.html directly
+cmp index.html crazygames/index.html                   # must be silent
 node tools/extract.js                            # only the node tests need this
 git add -A && git commit -m "…" && git push
 # then confirm Pages has caught up (it lags a minute or two):
@@ -586,7 +603,7 @@ A cached copy is indistinguishable from an unfixed one — **hard-refresh**
 ## 11. State of play
 
 Green at last check: `stress` 5243/0, `browsercheck` 333/0 in a real browser,
-`pokicheck` all clear on both builds, `buildercheck` all clear, `bounds` 0
+`crazycheck` all clear on both builds, `buildercheck` all clear, `bounds` 0
 out-of-bounds frames across 153 sheets.
 
 ### Closed since last time
@@ -628,13 +645,13 @@ c867060  Five minutes between breaks, not every sheet
 ### Before submitting
 
 ```bash
-node tools/extract.js && node tools/build.js && node tools/build-poki.js
-cmp index.html poki/index.html          # must be silent
-node tools/stress.js && node tools/pokicheck.js && \
-node tools/pokicheck.js index.html && node tools/buildercheck.js && node tools/bounds.js
+node tools/extract.js && node tools/build.js && node tools/build-crazy.js
+cmp index.html crazygames/index.html          # must be silent
+node tools/stress.js && node tools/crazycheck.js && \
+node tools/crazycheck.js index.html && node tools/buildercheck.js && node tools/bounds.js
 NODE_PATH=$HOME/.cbrowser/node_modules node tools/browsercheck.js
 node tools/solvability.js               # slow; expect 595-598/600, sheet 4 always — see §11
 ```
 
-Then open the Pages URL in the Poki Inspector and walk the SDK checklist by
+Then open the Pages URL in the CrazyGames dashboard's Quality Assurance Tool and walk the SDK checklist by
 hand. The lifecycle is asserted against a *mock* SDK; only a real one proves it.

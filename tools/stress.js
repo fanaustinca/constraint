@@ -759,7 +759,7 @@ function phaseEdview(){
     const body=sandbox.document.body;
     for(const [w,h] of screens){
      for(const embed of [false,true]){
-      /* the embed is what ships to Poki and used to be the untested half: the
+      /* the embed is what ships to CrazyGames and used to be the untested half: the
          standalone branch leaves stage.style.height empty, so every assertion
          that reads it passed on a zero */
       body.classList.toggle('embed', embed);

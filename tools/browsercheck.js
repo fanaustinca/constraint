@@ -1,13 +1,13 @@
-/* browsercheck.js — the Poki submission checklist, run in a real browser.
+/* browsercheck.js — the CrazyGames submission checklist, run in a real browser.
  *
  * Everything else in tools/ runs the game in a stubbed node sandbox: it can
  * assert what the code computes, and it cannot see a layout, a paint, a real
  * event loop or a real localStorage. This walks the same checklist against
- * headless Chrome, with the Poki CDN intercepted by a recording mock SDK.
+ * headless Chrome, with the CrazyGames CDN intercepted by a recording mock SDK.
  *
  *   NODE_PATH=$HOME/.cbrowser/node_modules node tools/browsercheck.js
  *   ... --only ads          one phase
- *   ... --file index.html   against the Pages build (default: poki/index.html)
+ *   ... --file index.html   against the Pages build (default: crazygames/index.html)
  *   ... --shots DIR         also write a screenshot per layout size
  *
  * See tools/browser.js for the harness and how to install puppeteer.
@@ -20,7 +20,7 @@ const fs=require('fs'), path=require('path');
 
 const argv=process.argv.slice(2);
 const arg=n=>{ const i=argv.indexOf('--'+n); return i<0?null:argv[i+1]; };
-const ONLY=arg('only'), FILE=arg('file')||'poki/index.html', SHOTS=arg('shots');
+const ONLY=arg('only'), FILE=arg('file')||'crazygames/index.html', SHOTS=arg('shots');
 if(SHOTS) fs.mkdirSync(SHOTS,{recursive:true});
 
 let checks=0; const bugs=[];
@@ -53,8 +53,9 @@ async function boot(){
     chk(s.errors.length===0, 'the page loads with no uncaught error');
     if(s.errors.length) note(JSON.stringify(s.errors));
     chk(c[0]==='init', 'init() is the first thing asked of the SDK');
-    chk(c.filter(x=>x==='gameLoadingFinished').length===1, 'gameLoadingFinished() fires exactly once');
-    chk(c.indexOf('init') < c.indexOf('gameLoadingFinished'), 'and it fires after init(), not before');
+    chk(c.filter(x=>x==='loadingStop').length===1, 'game.loadingStop() fires exactly once');
+    chk(c.indexOf('init') < c.indexOf('loadingStop'), 'and it fires after init(), not before');
+    chk(c.indexOf('loadingStart') < c.indexOf('loadingStop'), 'loadingStart() precedes loadingStop()');
     chk(c.indexOf('gameplayStart')===-1, 'no gameplayStart() before the player has done anything');
     const ext=s.external.filter(u=>u!==H.CDN);
     chk(ext.length===0, 'the SDK is the only thing loaded off this origin');
@@ -149,13 +150,13 @@ async function ads(){
     await H.sleep(200);
     chk(await p.evaluate(()=>G.state==='done'), 'clearing the sheet reaches the done panel');
     let c=await seq(p);
-    chk(c.indexOf('commercialBreak')===-1, 'nothing is asked for while the done panel is up');
+    chk(c.indexOf('requestAd:midgame')===-1, 'nothing is asked for while the done panel is up');
 
     await p.evaluate(()=>nextLevel());
     await H.until(p, ()=>ADS.inAd, 4000, 'the break to start');
     c=await seq(p);
-    const iBreak=c.lastIndexOf('commercialBreak');
-    chk(iBreak>=0, 'walking on to the next sheet asks for a commercialBreak()');
+    const iBreak=c.lastIndexOf('requestAd:midgame');
+    chk(iBreak>=0, 'walking on to the next sheet asks for a midgame ad');
     chk(c[iBreak-1]==='gameplayStop', 'and gameplayStop() goes out immediately before it');
 
     /* frozen, mute, deaf to input */
@@ -169,7 +170,7 @@ async function ads(){
     chk(await p.evaluate(()=>G.tick)===t0, 'the simulation does not advance while the break runs');
     chk(await p.evaluate(()=>IN.l===0&&IN.r===0&&IN.jumpHeld===0), 'and no key reaches the player');
     c=await seq(p);
-    chk(c.lastIndexOf('commercialBreak:end')<iBreak, 'the space bar does not cut the break short');
+    chk(c.lastIndexOf('requestAd:midgame:end')<iBreak, 'the space bar does not cut the break short');
     chk(await p.evaluate(()=>!document.pointerLockElement), 'nothing holds the pointer lock during a break');
 
     /* and back */
@@ -192,10 +193,10 @@ async function ads(){
     chk(c[c.length-1]==='gameplayStart', 'and a fresh gameplayStart() opens the new session');
 
     /* the floor between breaks */
-    const n=(await seq(p)).filter(x=>x==='commercialBreak').length;
+    const n=(await seq(p)).filter(x=>x==='requestAd:midgame').length;
     await p.evaluate(()=>{ win(); }); await H.sleep(150);
     await p.evaluate(()=>nextLevel()); await H.sleep(600);
-    chk((await seq(p)).filter(x=>x==='commercialBreak').length===n,
+    chk((await seq(p)).filter(x=>x==='requestAd:midgame').length===n,
         'a second sheet finished inside the gap asks for nothing');
     await p.evaluate(()=>{ if(G.state==='intro') closeIntro(); }); await H.sleep(250);
     chk(await p.evaluate(()=>G.state==='play'), 'and the player still walks straight on');
@@ -212,28 +213,28 @@ async function rewarded(){
     await toMenu(p);
     await startSheet(p,0);
     await p.evaluate(()=>togglePause()); await H.sleep(150);
-    chk((await seq(p)).indexOf('rewardedBreak')===-1, 'opening the pause menu starts no video');
+    chk((await seq(p)).indexOf('requestAd:rewarded')===-1, 'opening the pause menu starts no video');
 
     /* Skip sheet is the one rewarded path a player meets early */
     await p.click('#btnSkip'); await H.sleep(250);
     chk(await p.evaluate(()=>document.getElementById('ovAd').classList.contains('on')),
         'Skip sheet asks first rather than rolling a video');
-    chk((await seq(p)).indexOf('rewardedBreak')===-1, 'and still no video has been asked for');
+    chk((await seq(p)).indexOf('requestAd:rewarded')===-1, 'and still no video has been asked for');
     const txt=await p.evaluate(()=>document.getElementById('adSub').textContent+' | '+document.getElementById('adGo').textContent);
     chk(/video/i.test(txt), 'the prompt says a video is what it costs');
     note('prompt: '+txt.trim());
 
     /* declining */
     await p.click('#adNo'); await H.sleep(200);
-    chk((await seq(p)).indexOf('rewardedBreak')===-1, 'saying no rolls nothing');
+    chk((await seq(p)).indexOf('requestAd:rewarded')===-1, 'saying no rolls nothing');
 
     /* accepting */
     await p.click('#btnSkip'); await H.sleep(200);
     await p.click('#adGo');
     await H.until(p, ()=>ADS.inAd, 4000, 'the video to start');
     let c=await seq(p);
-    const i=c.lastIndexOf('rewardedBreak');
-    chk(i>=0, 'saying yes asks for a rewardedBreak()');
+    const i=c.lastIndexOf('requestAd:rewarded');
+    chk(i>=0, 'saying yes asks for a rewarded ad');
     chk(c[i-1]==='gameplayStop', 'and gameplayStop() precedes it');
     chk(await p.evaluate(()=>A.on===false), 'audio is off while a rewarded video runs');
     chk(await p.evaluate(()=>document.body.classList.contains('adlock')), 'and the app is locked');
@@ -286,7 +287,7 @@ async function adblock(){
     await p.evaluate(()=>togglePause()); await H.sleep(120);
     await p.click('#btnSkip'); await H.sleep(150);
     await p.click('#adGo'); await H.sleep(500);
-    const shipped=await p.evaluate(()=>POKI_BUILD===true);
+    const shipped=await p.evaluate(()=>CRAZY_BUILD===true);
     if(shipped) chk(await p.evaluate(()=>!(SAVE.skipped&&SAVE.skipped[G.lvl])),
                     'and a blocked video pays out nothing in the shipped build');
     const body=await p.evaluate(()=>document.body.innerText);
@@ -324,7 +325,7 @@ async function storage(){
     const keys=await p.evaluate(()=>Object.keys(localStorage));
     chk(keys.every(k=>k.startsWith('constraint.')), 'nothing is written outside the game\'s own namespace');
     note('keys: '+keys.join(', '));
-    /* Poki asks that a game storing progress says so where a player can read it */
+    /* CrazyGames asks that a game storing progress says so where a player can read it */
     const told=await p.evaluate(()=>{
       const seen=[];
       for(const id of ['ovLevels','ovHow']){
@@ -376,8 +377,9 @@ async function focus(){
     await p.evaluate(()=>{ const d=document.createElement('div'); d.id='tallpad';
       d.style.cssText='position:absolute;top:0;left:0;width:1px;height:5000px'; document.body.appendChild(d);
       document.documentElement.style.overflow='auto'; document.body.style.overflow='auto'; window.scrollTo(0,0); });
-    /* one key at a time, so a failure names the key. These are the ones Poki
-       asks about by name: the game claims them, so the browser must not. */
+    /* one key at a time, so a failure names the key. These are the ones a
+       platform submission checklist asks about by name: the game claims
+       them, so the browser must not. */
     const scrolled=[];
     for(const k of ['Space','ArrowDown','ArrowUp','ArrowLeft','ArrowRight']){
       await p.evaluate(()=>window.scrollTo(0,0));
@@ -408,7 +410,7 @@ async function focus(){
 
 /* ====================================================================== */
 const SIZES=[
-  ['poki minimum',        640,360, 1,false],
+  ['small box',           640,360, 1,false],
   ['720p',               1280,720, 1,false],
   ['1080p',              1920,1080,1,false],
   ['odd wide',           1440,600, 1,false],
@@ -559,7 +561,7 @@ async function resize(){
 /* ====================================================================== */
 async function builder(){
   phase('builder','the builder opens, draws, and gives the sheet a usable share of every box');
-  for(const [name,w,h,dpr,touch] of [['desktop',1280,720,1,false],['poki min',640,360,1,false],
+  for(const [name,w,h,dpr,touch] of [['desktop',1280,720,1,false],['small box',640,360,1,false],
                                      ['phone portrait',390,844,3,true],['phone landscape',844,390,3,true]]){
     const s=await H.open({file:FILE, viewport:{width:w,height:h,deviceScaleFactor:dpr,hasTouch:touch,isMobile:touch}});
     const p=s.page;

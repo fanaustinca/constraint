@@ -1,16 +1,17 @@
-/* Runs a built file against a mock Poki SDK that records the order it is called
-   in, and asserts the lifecycle rules: gameLoadingFinished before any gameplay,
-   gameplayStop before every ad, no input or simulation while a break is up, a
-   break only on the way back into gameplay, and no reward from a blocked ad.
+/* Runs a built file against a mock CrazyGames SDK that records the order it is
+   called in, and asserts the lifecycle rules: game.loadingStop() before any
+   gameplay, gameplayStop before every ad, no input or simulation while a break
+   is up, a break only on the way back into gameplay, and no reward from a
+   blocked ad.
 
-     node tools/pokicheck.js poki/index.html
-     node tools/pokicheck.js index.html            */
+     node tools/crazycheck.js crazygames/index.html
+     node tools/crazycheck.js index.html            */
 const fs=require('fs'), vm=require('vm'), path=require('path');
-const file=process.argv[2]||'poki/index.html';
+const file=process.argv[2]||'crazygames/index.html';
 const html=fs.readFileSync(path.join(__dirname,'..',file),'utf8');
 const IDS=new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]));
 const js=html.slice(html.indexOf('<script>')+8, html.lastIndexOf('</script>'));
-const isPoki=/const POKI_BUILD=true/.test(js);
+const isCrazy=/const CRAZY_BUILD=true/.test(js);
 
 const noop=()=>{};
 const ctxProxy=new Proxy({},{get:(t,k)=>{
@@ -31,14 +32,26 @@ function el(id){ return { id, _l:{},
   querySelectorAll:()=>[], getContext:()=>ctxProxy, onclick:null }; }
 
 const calls=[]; let REWARD=true;
-const PokiSDK={
+const CrazyGames={ SDK: {
   init(){ calls.push('init'); return Promise.resolve().then(()=>{ calls.push('init.done'); }); },
-  gameLoadingFinished(){ calls.push('gameLoadingFinished'); },
-  gameplayStart(){ calls.push('gameplayStart'); },
-  gameplayStop(){ calls.push('gameplayStop'); },
-  commercialBreak(onStart){ calls.push('commercialBreak'); if(onStart) onStart(); return Promise.resolve(); },
-  rewardedBreak(o){ calls.push('rewardedBreak'); if(o&&o.onStart) o.onStart(); return Promise.resolve(REWARD); }
-};
+  game:{
+    loadingStart(){ calls.push('loadingStart'); },
+    loadingStop(){ calls.push('loadingStop'); },
+    gameplayStart(){ calls.push('gameplayStart'); },
+    gameplayStop(){ calls.push('gameplayStop'); }
+  },
+  ad:{
+    requestAd(type, cb){
+      calls.push('requestAd:'+type);
+      cb&&cb.adStarted&&cb.adStarted();
+      Promise.resolve().then(()=>{
+        calls.push('requestAd:'+type+':end');
+        if(type==='rewarded' && !REWARD){ cb&&cb.adError&&cb.adError('no fill'); return; }
+        cb&&cb.adFinished&&cb.adFinished();
+      });
+    }
+  }
+}};
 let raf=null;
 const timers=[];
 const store={};
@@ -48,7 +61,7 @@ const sandbox={ console,
              createElement:()=>el('new'), querySelectorAll:()=>[], querySelector:()=>null,
              addEventListener:(t,f)=>{ (docListeners[t]=docListeners[t]||[]).push(f); },
              body:el('body'), hidden:false },
-  window:{ devicePixelRatio:1, AudioContext:null, PokiSDK: isPoki?PokiSDK:undefined },
+  window:{ devicePixelRatio:1, AudioContext:null, CrazyGames: isCrazy?CrazyGames:undefined },
   addEventListener:(t,f)=>{ (docListeners[t]=docListeners[t]||[]).push(f); },
   removeEventListener:noop,
   matchMedia:()=>({matches:false, addEventListener:noop}),
@@ -60,8 +73,8 @@ const sandbox={ console,
   localStorage:{getItem:k=>store[k]||null,setItem:(k,v)=>store[k]=v,removeItem:k=>delete store[k]},
   Math, Date, JSON, Array, Object, String, Number, Proxy, Set, Map, RegExp, Error, Promise,
   isFinite, parseInt, parseFloat };
-sandbox.window.PokiSDK = isPoki?PokiSDK:undefined;
-if(isPoki) sandbox.PokiSDK=PokiSDK;
+sandbox.window.CrazyGames = isCrazy?CrazyGames:undefined;
+if(isCrazy) sandbox.CrazyGames=CrazyGames;
 sandbox.window.AudioContext=function(){ throw new Error('no audio'); };
 sandbox.globalThis=sandbox;
 vm.createContext(sandbox);
@@ -74,7 +87,7 @@ let fail=0;
 const ok=(c,m)=>{ if(!c){ console.log('  FAIL '+m); fail++; } else console.log('  ok   '+m); };
 const idx=n=>calls.indexOf(n);
 
-console.log('\n'+file+(isPoki?'  (POKI build, SDK present)':'  (standalone build, no SDK)'));
+console.log('\n'+file+(isCrazy?'  (CrazyGames build, SDK present)':'  (standalone build, no SDK)'));
 
 /* ---- before init settles, nothing may reach gameplay ---- */
 console.log('\nstartup');
@@ -84,9 +97,10 @@ ok(idx('gameplayStart')===-1, 'a gameplayStart before loading finished is refuse
 
 setTimeout(()=>{
   frame();
-  if(isPoki){
-    ok(idx('gameLoadingFinished')>=0, 'gameLoadingFinished went out');
-    ok(idx('init')<idx('gameLoadingFinished'), 'init precedes gameLoadingFinished');
+  if(isCrazy){
+    ok(idx('loadingStop')>=0, 'game.loadingStop() went out');
+    ok(idx('init')<idx('loadingStop'), 'init precedes loadingStop');
+    ok(idx('loadingStart')<idx('loadingStop'), 'loadingStart precedes loadingStop');
   }
   ok(run("G.state")==='menu', 'the menu opens once init settles');
 
@@ -99,12 +113,12 @@ setTimeout(()=>{
     ok(run("ADS.playing")===false, 'no session is open behind an introduction card');
     run("closeIntro()"); frame();
   }
-  if(isPoki){
-    ok(idx('gameplayStart')>idx('gameLoadingFinished'), 'gameplayStart only after gameLoadingFinished');
+  if(isCrazy){
+    ok(idx('gameplayStart')>idx('loadingStop'), 'gameplayStart only after loadingStop');
   }
   ok(run("ADS.playing")===true, 'a session is open once play actually starts');
 
-  /* ---- a floor under the frequency, Poki's cap on top ---- */
+  /* ---- a floor under the frequency: CrazyGames has none of its own ---- */
   console.log('\nhow often a break may run');
   ok(run("ADS.GAP")>=3*60*1000, 'at least three minutes between breaks (it is '+
      (run("ADS.GAP")/60000)+' minutes)');
@@ -115,10 +129,10 @@ setTimeout(()=>{
   run("ADS.last=Date.now()-ADS.GAP-1000");
   ok(run("ADS.due()")===true,  'and allowed once the gap has passed');
   /* refusing must still deliver the player to the next sheet, and ask for nothing */
-  const beforeRef=calls.filter(c=>c==='commercialBreak').length;
+  const beforeRef=calls.filter(c=>c==='requestAd:midgame').length;
   run("ADS.last=Date.now(); globalThis.__went=false; ADS.break(()=>{globalThis.__went=true})");
   ok(run("__went")===true, 'a refused break still moves you on');
-  ok(calls.filter(c=>c==='commercialBreak').length===beforeRef,
+  ok(calls.filter(c=>c==='requestAd:midgame').length===beforeRef,
      'and asks the SDK for nothing');
   /* a rewarded video the player chose still resets the clock */
   run("ADS.last=Date.now()-ADS.GAP-1000; ADS.rewarded(()=>{})");
@@ -126,14 +140,14 @@ setTimeout(()=>{
   run("ADS.last=0");
 
   /* ---- a break only on the way back into gameplay ---- */
-  console.log('\nwhere a commercial break is allowed');
-  const asked=()=>calls.filter(c=>c==='commercialBreak').length;
+  console.log('\nwhere a midgame ad is allowed');
+  const asked=()=>calls.filter(c=>c==='requestAd:midgame').length;
   const probe=(setup,label,want)=>{
     const before=asked();
     run("ADS.last=0");        /* long ago, so the gap is not what is under test here */
     run(setup); run("nextLevel._shown=false; G.state='done'; try{nextLevel()}catch(e){}");
     /* with no SDK there is no break to request anywhere, which is the point */
-    ok((asked()-before>0)===(want && isPoki), isPoki? label : label.replace(/-> .*/,'-> no SDK, no break'));
+    ok((asked()-before>0)===(want && isCrazy), isCrazy? label : label.replace(/-> .*/,'-> no SDK, no break'));
   };
   /* reaching a sheet mid-run means having unlocked it — win() raises SAVE.unlocked
      before the player ever gets to press Next, so the setup has to say so too */
@@ -148,14 +162,14 @@ setTimeout(()=>{
   probe("SAVE.unlocked=1; G.lvl=Array.from(tasters()).sort((a,b)=>a-b)[0]",
         'side-world taster, back to the list -> no break', false);
 
-  if(isPoki){
-    ok(idx('gameplayStop')>=0 && idx('gameplayStop')<calls.lastIndexOf('commercialBreak'),
+  if(isCrazy){
+    ok(idx('gameplayStop')>=0 && idx('gameplayStop')<calls.lastIndexOf('requestAd:midgame'),
        'gameplayStop precedes the break');
   }
 
   /* ---- every reward is asked for before it is taken ---- */
   console.log('\nno video starts without a prompt first');
-  const rb=()=>calls.filter(c=>c==='rewardedBreak').length;
+  const rb=()=>calls.filter(c=>c==='requestAd:rewarded').length;
   const prompted=(open,label)=>{
     const before=rb();
     run("ADQ=null; showOv(null)");
@@ -163,7 +177,7 @@ setTimeout(()=>{
     const up=run("document.getElementById('ovAd').classList.contains('on')");
     ok(up && rb()===before, label);
     const sub=run("document.getElementById('adSub').textContent");
-    ok(!isPoki || /video/i.test(sub), '  ...and it says a video will play');
+    ok(!isCrazy || /video/i.test(sub), '  ...and it says a video will play');
     run("ADQ=null; showOv(null)");
   };
   prompted("G.state='pause'; G.lvl=5; document.getElementById('btnSkip').onclick()",
@@ -232,9 +246,9 @@ setTimeout(()=>{
                    .map(h=>(h.match(/buytag[^>]*>([^<]*)</)||[])[1]||'');
     ok(tags.length>0, 'a cleared sheet is tagged in the remix list');
     const priced=tags.every(t=>/video/i.test(t));
-    ok(priced===isPoki, isPoki? 'and the tag names the video it costs'
+    ok(priced===isCrazy, isCrazy? 'and the tag names the video it costs'
                               : 'and the standalone tag promises no video');
-    ok(!tags.some(t=>/^\s*\u2713/.test(t)), 'none of them reads as already unlocked');
+    ok(!tags.some(t=>/^\s*✓/.test(t)), 'none of them reads as already unlocked');
     console.log('       tag on a cleared, unopened sheet: "'+(tags[0]||'')+'"');
   }
   run("SAVE.best={}; SAVE.skipped={}; SAVE.unlocked=1;");
@@ -248,13 +262,13 @@ setTimeout(()=>{
     REWARD=false;
     return grant();
   }).then(g=>{
-    ok(g===false || !isPoki, isPoki? 'an incomplete video grants nothing'
+    ok(g===false || !isCrazy, isCrazy? 'an incomplete video grants nothing'
                                    : 'standalone build grants without an SDK');
     /* blocked SDK */
-    run("delete window.PokiSDK");
+    run("delete window.CrazyGames");
     return grant();
   }).then(g=>{
-    ok(g===!isPoki, isPoki? 'a blocked SDK grants nothing'
+    ok(g===!isCrazy, isCrazy? 'a blocked SDK grants nothing'
                           : 'no SDK in a standalone build still grants');
     /* ---- hidden tab ---- */
     console.log('\nhidden tab');
